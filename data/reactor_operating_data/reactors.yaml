@@ -1,0 +1,15 @@
+- reactor_label: F1
+  reactor_name: Forsmark 1
+  reactor_type: BWR
+- reactor_label: F2
+  reactor_name: Forsmark 2
+  reactor_type: BWR
+- reactor_label: F3
+  reactor_name: Forsmark 3
+  reactor_type: BWR
+- reactor_label: R3
+  reactor_name: Ringhals 3
+  reactor_type: PWR
+- reactor_label: R4
+  reactor_name: Ringhals 4
+  reactor_type: PWR

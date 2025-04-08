@@ -1,1 +1,3 @@
 nicegui
+beautifulsoup4
+mashumaro
