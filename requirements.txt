@@ -1,3 +1,5 @@
 nicegui
 beautifulsoup4
 mashumaro
+influxdb-client
+python-dotenv

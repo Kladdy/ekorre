@@ -1,7 +1,7 @@
 set -euo pipefail
 
 venv_path="ekorre-venv"
-python_version="3.12.9"
+python_version="3.12.8"
 
 # Check if the virtual environment already exists
 if [ -d $venv_path ]; then
