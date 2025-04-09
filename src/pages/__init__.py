@@ -4,4 +4,4 @@ from nicegui import ui
 
 from . import index
 
-ui.run(port=os.getenv("NICEGUI_PORT"))
+ui.run(port=str(os.getenv("NICEGUI_PORT")))
