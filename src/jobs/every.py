@@ -6,7 +6,9 @@ import traceback
 def every(delay: float, task: callable):
     next_time = time.time()
     while True:
-        time.sleep(max(0, next_time - time.time()))
+        sleep_time = max(0, next_time - time.time())
+        print(f"Sleeping for {sleep_time:.0f} s... 💤 (delay is {delay} s)")
+        time.sleep(sleep_time)
         try:
             task()
         except Exception:
