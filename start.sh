@@ -1,12 +1,11 @@
 #!/bin/bash
 export PYENV_ROOT="/root/.pyenv"
 export PATH="$PYENV_ROOT/bin:$PATH"
-eval "$(pyenv init -)"
 
 cd /app
 
 # Create and activate the virtual environment
-./install_venv.sh
+./install_venv_no_pyenv.sh
 source ekorre-venv/bin/activate
 
 # Run your Python app
