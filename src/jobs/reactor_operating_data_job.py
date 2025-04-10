@@ -97,7 +97,7 @@ def reactor_operating_data_job():
     write_to_influx(points, REACTOR_OPERATING_DATA_BUCKET)
 
 
-REFRESH_INTERVAL = 3 * 60  # seconds
+REFRESH_INTERVAL = 3 * 60
 threading.Thread(
     target=lambda: every(REFRESH_INTERVAL, reactor_operating_data_job),
     daemon=True,
