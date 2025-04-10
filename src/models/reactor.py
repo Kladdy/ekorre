@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 from pathlib import Path
 
-from mashumaro.codecs.yaml import YAMLDecoder, yaml_decode, yaml_encode
+from mashumaro.codecs.yaml import yaml_decode
 from mashumaro.mixins.yaml import DataClassYAMLMixin
 
 
