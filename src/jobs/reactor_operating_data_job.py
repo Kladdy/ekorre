@@ -4,13 +4,16 @@ import time
 from datetime import datetime
 
 from bs4 import BeautifulSoup
-from influxdb_client import InfluxDBClient, Point
+from influxdb_client import Point
 from requests import Session
 
-from influxdb import write_to_influx
+from influxdb import get_datetime_of_extreme, write_to_influx
 from models.reactor_operating_data import PowerPlantData
 
 from .every import every
+
+REACTOR_OPERATING_DATA_BUCKET = "reactor_operating_data"
+REACTOR_OPERATING_DATA_MEASUREMENT = "reactor_power"
 
 
 def get_reactor_operating_data() -> list[PowerPlantData]:
@@ -47,29 +50,54 @@ def reactor_operating_data_job():
 
     points: list[Point] = []
 
+    datetime_of_last = get_datetime_of_extreme(
+        REACTOR_OPERATING_DATA_BUCKET,
+        REACTOR_OPERATING_DATA_MEASUREMENT,
+        "last",
+    )
+    if datetime_of_last is None:
+        datetime_of_last = datetime.fromtimestamp(0)
+    print(
+        f"Latest data in InfluxDB: {datetime_of_last} (from '{REACTOR_OPERATING_DATA_BUCKET}')"
+    )
+
     for power_plant_data in power_plant_data_list:
         for block in power_plant_data.blockProductionDataList:
+            point_datetime = datetime.fromisoformat(power_plant_data.timestamp)
 
-            print(
-                f"Adding datapoint 🟢 {block.name}: {power_plant_data.timestamp}, {block.production:.0f} {block.unit}, {block.percent:.1f} %"
-            )
-
-            points.append(
+            point = (
                 Point("reactor_power")
                 .tag("block", block.name)
                 .field(block.unit, block.production)
                 .field("percent", block.percent)
                 .time(
-                    datetime.fromisoformat(power_plant_data.timestamp),
+                    point_datetime,
                     write_precision="s",
                 )
             )
 
+            # Check if the point already exists in InfluxDB
+            if point_datetime.replace(microsecond=0) > datetime_of_last.replace(
+                microsecond=0
+            ):
+                points.append(point)
+                print(
+                    f"Adding datapoint 🟢 {block.name}: {power_plant_data.timestamp}, {block.production:.0f} {block.unit}, {block.percent:.1f} %"
+                )
+            else:
+                print(
+                    f"Datapoint not newer than latest data 🔵 {block.name}: {power_plant_data.timestamp}, {block.production:.0f} {block.unit}, {block.percent:.1f} %"
+                )
+
     # Write the points to InfluxDB
-    write_to_influx(points, "reactor_operating_data")
+    if len(points) == 0:
+        print("No new data to write to InfluxDB 🔵")
+        return
+    print(f"Writing {len(points)} new datapoints to InfluxDB 🟢")
+    write_to_influx(points, REACTOR_OPERATING_DATA_BUCKET)
 
 
-REFRESH_INTERVAL = 10 * 60  # seconds
+REFRESH_INTERVAL = 3 * 60  # seconds
 threading.Thread(
     target=lambda: every(REFRESH_INTERVAL, reactor_operating_data_job),
     daemon=True,

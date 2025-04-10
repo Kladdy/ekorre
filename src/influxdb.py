@@ -1,4 +1,6 @@
 import os
+from datetime import datetime
+from typing import Literal
 
 from influxdb_client import InfluxDBClient, Point
 from influxdb_client.client.write_api import SYNCHRONOUS
@@ -32,3 +34,26 @@ def write_to_influx(data: Point | list[Point], bucket: str):
     with client.write_api(write_options=SYNCHRONOUS) as write_api:
         write_api.write(bucket=get_influx_bucket(bucket), record=data)
     client.close()
+
+
+def get_datetime_of_extreme(
+    bucket: str, measurement: str, extreme: Literal["first", "last"]
+) -> datetime | None:
+    client = get_influx_client()
+    query_api = client.query_api()
+
+    flux = f"""
+    from(bucket: "{get_influx_bucket(bucket)}")
+      |> range(start: 0)
+      {f'|> filter(fn: (r) => r._measurement == "{measurement}")' if measurement else ''}
+      |> {extreme}()
+    """
+
+    result = query_api.query(flux)
+    client.close()
+
+    if result:
+        # Extract the last timestamp from the result
+        for table in result:
+            for record in table.records:
+                return record.get_time()
