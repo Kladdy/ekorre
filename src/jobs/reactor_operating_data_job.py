@@ -8,12 +8,13 @@ from influxdb_client import Point
 from requests import Session
 
 from influxdb import get_datetime_of_extreme, write_to_influx
+from models.reactor import (
+    REACTOR_OPERATING_DATA_BUCKET,
+    REACTOR_OPERATING_DATA_MEASUREMENT,
+)
 from models.reactor_operating_data import PowerPlantData
 
 from .every import every
-
-REACTOR_OPERATING_DATA_BUCKET = "reactor_operating_data"
-REACTOR_OPERATING_DATA_MEASUREMENT = "reactor_power"
 
 
 def get_reactor_operating_data() -> list[PowerPlantData]:

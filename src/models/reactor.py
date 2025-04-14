@@ -4,6 +4,9 @@ from pathlib import Path
 from mashumaro.codecs.yaml import yaml_decode
 from mashumaro.mixins.yaml import DataClassYAMLMixin
 
+REACTOR_OPERATING_DATA_BUCKET = "reactor_operating_data"
+REACTOR_OPERATING_DATA_MEASUREMENT = "reactor_power"
+
 
 @dataclass
 class ReactorOperatingData(DataClassYAMLMixin):

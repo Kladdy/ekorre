@@ -36,6 +36,37 @@ def write_to_influx(data: Point | list[Point], bucket: str):
     client.close()
 
 
+def read_from_influx(
+    bucket: str,
+    measurement: str,
+    field: str,
+    start: datetime | None = None,
+    stop: datetime | None = None,
+    tags: dict = None,
+):
+    client = get_influx_client()
+    query_api = client.query_api()
+
+    tag_filters = []
+    if tags:
+        for key, value in tags.items():
+            tag_filters.append(f'|> filter(fn: (r) => r.{key} == "{value}")')
+    tag_filters = "\n".join(tag_filters)
+
+    flux = f"""
+    from(bucket: "{get_influx_bucket(bucket)}")
+      |> range(start: {start.isoformat() + "Z" if start else 0}, stop: {stop.isoformat() + "Z" if stop else 'now()'})
+      {f'|> filter(fn: (r) => r._measurement == "{measurement}")' if measurement else ''}
+      {f'|> filter(fn: (r) => r._field == "{field}")' if field else ''}
+      {tag_filters}
+    """
+
+    result = query_api.query(flux)
+    client.close()
+
+    return [record for table in result for record in table.records]
+
+
 def get_datetime_of_extreme(
     bucket: str, measurement: str, extreme: Literal["first", "last"]
 ) -> datetime | None:
