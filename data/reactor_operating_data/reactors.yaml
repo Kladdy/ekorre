@@ -1,15 +1,34 @@
 - reactor_label: F1
   reactor_name: Forsmark 1
   reactor_type: BWR
+  rated_reactor_powers:
+    - start: 2025-04-01T00:00:00Z
+      power: 1120 # https://karnkraft.vattenfall.se/forsmark/produktion/
 - reactor_label: F2
   reactor_name: Forsmark 2
   reactor_type: BWR
+  rated_reactor_powers:
+    - start: 2025-04-01T00:00:00Z
+      power: 1121 # https://karnkraft.vattenfall.se/forsmark/produktion/
 - reactor_label: F3
   reactor_name: Forsmark 3
   reactor_type: BWR
+  rated_reactor_powers:
+    - start: 2025-04-01T00:00:00Z
+      power: 1170 # https://group.vattenfall.com/se/nyheter-och-press/nyheter/2024/forsmark-1-gar-in-i-en-permanent-effekthojning
 - reactor_label: R3
   reactor_name: Ringhals 3
   reactor_type: PWR
+  rated_reactor_powers:
+    - start: 2025-04-01T00:00:00Z
+      power: 1074 # https://karnkraft.vattenfall.se/ringhals/produktion
 - reactor_label: R4
   reactor_name: Ringhals 4
   reactor_type: PWR
+  rated_reactor_powers:
+    - start: 2025-04-01T00:00:00Z
+      power: 1130 # https://karnkraft.vattenfall.se/ringhals/produktion
+    - start: 2025-04-10T00:00:00Z
+      power: 1030 # https://karnkraft.vattenfall.se/ringhals/produktion
+    - start: 2025-04-14T00:00:00Z
+      power: 900 # https://karnkraft.vattenfall.se/ringhals/produktion

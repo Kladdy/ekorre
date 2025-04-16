@@ -1,4 +1,5 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from datetime import datetime
 from pathlib import Path
 
 from mashumaro.codecs.yaml import yaml_decode
@@ -9,10 +10,17 @@ REACTOR_OPERATING_DATA_MEASUREMENT = "reactor_power"
 
 
 @dataclass
-class ReactorOperatingData(DataClassYAMLMixin):
+class RatedReactorPower(DataClassYAMLMixin):
+    start: str
+    power: float
+
+
+@dataclass
+class Reactor(DataClassYAMLMixin):
     reactor_label: str
     reactor_name: str
     reactor_type: str
+    rated_reactor_powers: list[RatedReactorPower] = field(default_factory=list)
 
     @classmethod
     def load_many_from_file(cls, file_path: str | Path):

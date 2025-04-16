@@ -7,7 +7,7 @@ from influxdb import get_datetime_of_extreme, read_from_influx
 from models.reactor import (
     REACTOR_OPERATING_DATA_BUCKET,
     REACTOR_OPERATING_DATA_MEASUREMENT,
-    ReactorOperatingData,
+    Reactor,
 )
 
 # from pages import theme
@@ -69,7 +69,7 @@ def reactor_operating_data():
         ui.separator().classes("mb-2")
 
         with ui.row():
-            for reactor in ReactorOperatingData.load_many_from_file(
+            for reactor in Reactor.load_many_from_file(
                 "data/reactor_operating_data/reactors.yaml"
             ):
 
@@ -77,7 +77,7 @@ def reactor_operating_data():
                 records = read_from_influx(
                     REACTOR_OPERATING_DATA_BUCKET,
                     REACTOR_OPERATING_DATA_MEASUREMENT,
-                    "percent",
+                    "MW",
                     tags={"block": reactor.reactor_label},
                     start=start_earliest_on_local_day,
                     stop=stop_latest_on_local_day,
@@ -99,17 +99,49 @@ def reactor_operating_data():
                 x = [utc_to_local(record.get_time()) for record in records]
                 y = [record.get_value() for record in records]
 
+                # Sort the rated reactor powers by start date, reverse order
+                reactor.rated_reactor_powers.sort(
+                    key=lambda x: datetime.fromisoformat(x.start), reverse=True
+                )
+
+                # Normalize each y value using the rated reactor power, using each datapoints datetime as a reference
+                assert (
+                    len(reactor.rated_reactor_powers) > 0
+                ), f"Reactor {reactor.reactor_name} has no rated reactor power"
+                for idx, (x_value, y_value) in enumerate(
+                    zip(x, y, strict=True)
+                ):
+                    # Get the rated reactor power for the given x value
+
+                    rated_reactor_power = next(
+                        (
+                            r.power
+                            for r in reactor.rated_reactor_powers
+                            if datetime.fromisoformat(r.start) <= x_value
+                        ),
+                        None,
+                    )
+                    if rated_reactor_power is None:
+                        raise ValueError(
+                            f"Reactor {reactor.reactor_name} has no rated reactor power for {x_value}"
+                        )
+
+                    y[idx] = y_value / rated_reactor_power * 100
+
                 # Time window to allow values to not exist over before inserting null values
-                time_window = 180
+                time_window_minutes = 180
 
                 # Loop over all x values. If there is more than time_window minutes between two x values, insert that time in x and a None value in y. This breaks the plot line if data is missing. Updates are expected every 10 minutes.
                 i = 0
                 while i < len(x) - 1:
                     if (
                         y[i] != None
-                        and x[i] + timedelta(minutes=time_window) < x[i + 1]
+                        and x[i] + timedelta(minutes=time_window_minutes)
+                        < x[i + 1]
                     ):
-                        x.insert(i + 1, x[i] + timedelta(minutes=time_window))
+                        x.insert(
+                            i + 1, x[i] + timedelta(minutes=time_window_minutes)
+                        )
                         y.insert(i + 1, None)
                     i += 1
 
@@ -138,7 +170,7 @@ def reactor_operating_data():
                             )
                         ui.space()
                         ui.circular_progress(
-                            round(records[-1].get_value()),
+                            round(y[-1]),
                             min=0,
                             max=100,
                             size="md",
