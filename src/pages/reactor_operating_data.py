@@ -1,6 +1,7 @@
 from datetime import datetime, timedelta, timezone
 
 import plotly.graph_objects as go
+import pytz
 from nicegui import events, ui
 
 from influxdb import get_datetime_of_extreme, read_from_influx
@@ -14,12 +15,17 @@ from models.reactor import (
 
 
 # Based on https://stackoverflow.com/a/13287083
-def utc_to_local(utc_dt: datetime):
-    return utc_dt.replace(tzinfo=timezone.utc).astimezone(tz=None)
+def utc_to_local(utc_dt: datetime, tz: timezone):
+    return utc_dt.replace(tzinfo=timezone.utc).astimezone(tz=tz)
 
 
-@ui.page("/reactor_operating_data")
-def reactor_operating_data():
+@ui.page("/reactor_operating_data", title="Reactor Operating Data | Ekorre")
+async def reactor_operating_data():
+    await ui.context.client.connected()
+    browser_timezone_str = await ui.run_javascript(
+        "Intl.DateTimeFormat().resolvedOptions().timeZone"
+    )
+    browser_timezone = pytz.timezone(browser_timezone_str)
 
     def get_dates_from_value_change_event(
         event: events.ValueChangeEventArguments,
@@ -41,9 +47,9 @@ def reactor_operating_data():
         start_local: datetime | None = None, stop_local: datetime | None = None
     ):
         if start_local is None:
-            start_local = datetime.now()
+            start_local = datetime.now(tz=browser_timezone)
         if stop_local is None:
-            stop_local = datetime.now()
+            stop_local = datetime.now(tz=browser_timezone)
 
         start_earliest_on_local_day = start_local.replace(
             hour=0, minute=0, second=0, microsecond=0
@@ -96,7 +102,10 @@ def reactor_operating_data():
                         ui.label("No data")
                     continue
 
-                x = [utc_to_local(record.get_time()) for record in records]
+                x = [
+                    utc_to_local(record.get_time(), browser_timezone)
+                    for record in records
+                ]
                 y = [record.get_value() for record in records]
 
                 # Sort the rated reactor powers by start date, reverse order
@@ -190,19 +199,21 @@ def reactor_operating_data():
             REACTOR_OPERATING_DATA_MEASUREMENT,
             "last",
         )
-        start_interval_date_str = utc_to_local(start_interval).strftime(
-            "%Y/%m/%d"
-        )
-        stop_interval_date_str = utc_to_local(stop_interval).strftime(
-            "%Y/%m/%d"
-        )
+        start_interval_date_str = utc_to_local(
+            start_interval, browser_timezone
+        ).strftime("%Y/%m/%d")
+        stop_interval_date_str = utc_to_local(
+            stop_interval, browser_timezone
+        ).strftime("%Y/%m/%d")
 
         today = datetime.now(timezone.utc)
         if today < start_interval:
             today = start_interval
         elif today > stop_interval:
             today = stop_interval
-        today_interval_str_dashes = utc_to_local(today).strftime("%Y-%m-%d")
+        today_interval_str_dashes = utc_to_local(
+            today, browser_timezone
+        ).strftime("%Y-%m-%d")
 
         with ui.menu() as date_range_menu:
             with ui.date(
