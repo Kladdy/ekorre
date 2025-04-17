@@ -28,7 +28,3 @@
   rated_reactor_powers:
     - start: 2025-04-01T00:00:00Z
       power: 1130 # https://karnkraft.vattenfall.se/ringhals/produktion
-    - start: 2025-04-10T00:00:00Z
-      power: 1030 # https://karnkraft.vattenfall.se/ringhals/produktion
-    - start: 2025-04-14T00:00:00Z
-      power: 900 # https://karnkraft.vattenfall.se/ringhals/produktion

@@ -56,7 +56,7 @@ def reactor_operating_data():
             ui.icon("edit_calendar", size="md", color="primary").on(
                 "click", date_range_menu.open
             ).classes(
-                "cursor-pointer ml-2 hover:bg-slate-200 rounded-full h-12 w-12"
+                "cursor-pointer ml-2 bg-slate-800 hover:bg-slate-700 rounded-full h-12 w-12"
             )
             with ui.row().classes("text-lg font-mono"):
                 if start_local.date() == stop_local.date():
@@ -208,6 +208,7 @@ def reactor_operating_data():
             with ui.date(
                 value=today_interval_str_dashes,
                 on_change=lambda x: x.value is not None
+                and (date_range_menu.close() or True)
                 and plot_cards.refresh(*get_dates_from_value_change_event(x)),
             ).props(
                 f'''range :options="date => date >= '{start_interval_date_str}' && date <= '{stop_interval_date_str}'"'''

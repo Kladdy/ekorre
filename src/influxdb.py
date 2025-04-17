@@ -1,5 +1,5 @@
 import os
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Literal
 
 from influxdb_client import InfluxDBClient, Point
@@ -53,9 +53,12 @@ def read_from_influx(
             tag_filters.append(f'|> filter(fn: (r) => r.{key} == "{value}")')
     tag_filters = "\n".join(tag_filters)
 
+    start_range = start.astimezone(timezone.utc).isoformat() if start else 0
+    stop_range = stop.astimezone(timezone.utc).isoformat() if stop else "now()"
+
     flux = f"""
     from(bucket: "{get_influx_bucket(bucket)}")
-      |> range(start: {start.isoformat() + "Z" if start else 0}, stop: {stop.isoformat() + "Z" if stop else 'now()'})
+      |> range(start: {start_range}, stop: {stop_range})
       {f'|> filter(fn: (r) => r._measurement == "{measurement}")' if measurement else ''}
       {f'|> filter(fn: (r) => r._field == "{field}")' if field else ''}
       {tag_filters}
