@@ -1,8 +1,10 @@
+import asyncio
 from datetime import datetime, timedelta, timezone
 
 import plotly.graph_objects as go
 import pytz
 from nicegui import events, ui
+from nicegui.events import ValueChangeEventArguments
 
 from influxdb import get_datetime_of_extreme, read_from_influx
 from models.reactor import (
@@ -219,15 +221,26 @@ async def reactor_operating_data():
             today, browser_timezone
         ).strftime("%Y-%m-%d")
 
+        async def refresh_plot_cards(
+            x: ValueChangeEventArguments,
+            date_range: ui.date,
+            date_range_menu: ui.menu,
+        ):
+            date_range.disable()
+            date_range.update()
+            await asyncio.sleep(0.01)
+            plot_cards.refresh(*get_dates_from_value_change_event(x))
+            date_range.enable()
+            date_range_menu.close()
+
         with ui.menu() as date_range_menu:
             with ui.date(
                 value=today_interval_str_dashes,
                 on_change=lambda x: x.value is not None
-                and (date_range_menu.close() or True)
-                and plot_cards.refresh(*get_dates_from_value_change_event(x)),
+                and refresh_plot_cards(x, date_range, date_range_menu),
             ).props(
                 f'''range :options="date => date >= '{start_interval_date_str}' && date <= '{stop_interval_date_str}'"'''
-            ):
+            ) as date_range:
                 with ui.row().classes("justify-end"):
                     ui.button("Close", on_click=date_range_menu.close).props(
                         "flat"
