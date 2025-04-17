@@ -22,10 +22,14 @@ def utc_to_local(utc_dt: datetime, tz: timezone):
 @ui.page("/reactor_operating_data", title="Reactor Operating Data | Ekorre")
 async def reactor_operating_data():
     await ui.context.client.connected()
-    browser_timezone_str = await ui.run_javascript(
-        "Intl.DateTimeFormat().resolvedOptions().timeZone"
-    )
-    browser_timezone = pytz.timezone(browser_timezone_str)
+    try:
+        browser_timezone_str = await ui.run_javascript(
+            "Intl.DateTimeFormat().resolvedOptions().timeZone"
+        )
+        browser_timezone = pytz.timezone(browser_timezone_str)
+    except Exception as e:
+        print(f"Error getting browser timezone: {e}. Defaulting to UTC.")
+        browser_timezone = pytz.timezone("UTC")
 
     def get_dates_from_value_change_event(
         event: events.ValueChangeEventArguments,
