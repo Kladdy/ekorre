@@ -2,16 +2,26 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
 
+from mashumaro import field_options
 from mashumaro.codecs.yaml import yaml_decode
 from mashumaro.mixins.yaml import DataClassYAMLMixin
+from mashumaro.types import SerializationStrategy
 
 REACTOR_OPERATING_DATA_BUCKET = "reactor_operating_data"
 REACTOR_OPERATING_DATA_MEASUREMENT = "reactor_power"
 
 
+class DateTimeSerializationStrategy(SerializationStrategy, use_annotations=True):
+    def serialize(self, value: datetime) -> str:
+        return value.isoformat()
+
+    def deserialize(self, value: str) -> datetime:
+        return datetime.fromisoformat(value)
+
+
 @dataclass
 class RatedReactorPower(DataClassYAMLMixin):
-    start: str
+    start: datetime = field(metadata=field_options(serialization_strategy=DateTimeSerializationStrategy()))
     power: float
 
 
