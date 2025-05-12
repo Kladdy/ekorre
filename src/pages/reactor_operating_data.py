@@ -189,7 +189,11 @@ async def reactor_operating_data():
                 value=today_interval_str_dashes,
                 on_change=lambda x: x.value is not None and refresh_plot_cards(x, date_range, date_range_menu),
             ).props(
-                f'''range :options="date => date >= '{start_interval_date_str}' && date <= '{stop_interval_date_str}'"'''
+                f"""
+                range 
+                first-day-of-week=1
+                :options="date => date >= '{start_interval_date_str}' && date <= '{stop_interval_date_str}'"
+                """
             ) as date_range:
                 with ui.row().classes("justify-end"):
                     ui.button("Close", on_click=date_range_menu.close).props("flat")
