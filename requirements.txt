@@ -5,3 +5,4 @@ influxdb-client
 python-dotenv
 plotly 
 pandas 
+requests
