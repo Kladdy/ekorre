@@ -2,6 +2,8 @@ set -euo pipefail
 
 venv_path="ekorre-venv"
 
+rm -rf $venv_path
+
 # Check if the virtual environment already exists
 if [ -d $venv_path ]; then
     echo "Virtual environment already exists at path '$venv_path'. Please remove it first if the intention is to recreate the venv."
