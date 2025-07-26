@@ -26,15 +26,11 @@ def get_reactor_operating_data() -> list[PowerPlantData]:
     session = Session()
     page = session.get(DATA_URL, headers=headers)
     soup = BeautifulSoup(page.content, "html.parser")
-    script_tags_with_json = soup.find_all(
-        "script", {"type": "application/json"}
-    )
+    script_tags_with_json = soup.find_all("script", {"type": "application/json"})
     json_contents = [tag.string for tag in script_tags_with_json]
 
     # Parse the JSON data as a list of PowerPlantData objects
-    power_plant_data_list = [
-        PowerPlantData.from_json(json_content) for json_content in json_contents
-    ]
+    power_plant_data_list = [PowerPlantData.from_json(json_content) for json_content in json_contents]
 
     return power_plant_data_list
 
@@ -58,9 +54,7 @@ def reactor_operating_data_job():
     )
     if datetime_of_last is None:
         datetime_of_last = datetime.fromtimestamp(0)
-    print(
-        f"Latest data in InfluxDB: {datetime_of_last} (from '{REACTOR_OPERATING_DATA_BUCKET}')"
-    )
+    print(f"Latest data in InfluxDB: {datetime_of_last} (from '{REACTOR_OPERATING_DATA_BUCKET}')")
 
     for power_plant_data in power_plant_data_list:
         for block in power_plant_data.blockProductionDataList:
@@ -78,9 +72,7 @@ def reactor_operating_data_job():
             )
 
             # Check if the point already exists in InfluxDB
-            if point_datetime.replace(microsecond=0) > datetime_of_last.replace(
-                microsecond=0
-            ):
+            if point_datetime.replace(microsecond=0) > datetime_of_last.replace(microsecond=0):
                 points.append(point)
                 print(
                     f"Adding datapoint 🟢 {block.name}: {power_plant_data.timestamp}, {block.production:.0f} {block.unit}, {block.percent:.1f} %"
