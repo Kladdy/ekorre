@@ -26,7 +26,8 @@ def get_influx_client():
 
 
 def get_influx_bucket(bucket_name: str):
-    return f"{bucket_name}-{os.getenv("INFLUX_ENV")}"
+    influx_env = os.getenv("INFLUX_ENV")
+    return f"{bucket_name}-{influx_env}"
 
 
 def write_to_influx(data: Point | list[Point], bucket: str):
@@ -70,9 +71,7 @@ def read_from_influx(
     return [record for table in result for record in table.records]
 
 
-def get_datetime_of_extreme(
-    bucket: str, measurement: str, extreme: Literal["first", "last"]
-) -> datetime | None:
+def get_datetime_of_extreme(bucket: str, measurement: str, extreme: Literal["first", "last"]) -> datetime | None:
     client = get_influx_client()
     query_api = client.query_api()
 

@@ -49,7 +49,8 @@ async def reactor_operating_data():
     @ui.refreshable
     def plot_cards(start_local: datetime | None = None, stop_local: datetime | None = None):
         if start_local is None:
-            start_local = datetime.now(tz=browser_timezone)
+            stop_local = datetime.now(tz=browser_timezone)
+            start_local = stop_local - timedelta(weeks=2)
         if stop_local is None:
             stop_local = datetime.now(tz=browser_timezone)
 
