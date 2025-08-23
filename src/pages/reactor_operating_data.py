@@ -172,6 +172,8 @@ async def reactor_operating_data():
         elif today > stop_interval:
             today = stop_interval
         today_interval_str_dashes = utc_to_local(today, browser_timezone).strftime("%Y-%m-%d")
+        two_weeks_ago = today - timedelta(weeks=2)
+        two_weeks_ago_interval_str_dashes = utc_to_local(two_weeks_ago, browser_timezone).strftime("%Y-%m-%d")
 
         async def refresh_plot_cards(
             x: ValueChangeEventArguments,
@@ -187,7 +189,10 @@ async def reactor_operating_data():
 
         with ui.menu() as date_range_menu:
             with ui.date(
-                value=today_interval_str_dashes,
+                value={
+                    "from": two_weeks_ago_interval_str_dashes,
+                    "to": today_interval_str_dashes,
+                },
                 on_change=lambda x: x.value is not None and refresh_plot_cards(x, date_range, date_range_menu),
             ).props(
                 f"""
