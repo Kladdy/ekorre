@@ -10,3 +10,5 @@ source ekorre-venv/bin/activate
 
 # Run your Python app
 python3 src/main.py
+
+# export NICEGUI_PORT="12345"; python3 src/main.py
