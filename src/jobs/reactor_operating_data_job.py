@@ -1,4 +1,5 @@
 import http.client
+import os
 import threading
 import time
 from datetime import datetime
@@ -90,8 +91,12 @@ def reactor_operating_data_job():
     write_to_influx(points, REACTOR_OPERATING_DATA_BUCKET)
 
 
-REFRESH_INTERVAL = 3 * 60
-threading.Thread(
-    target=lambda: every(REFRESH_INTERVAL, reactor_operating_data_job),
-    daemon=True,
-).start()
+# Check if the NO_FETCH_REACTOR_DATA=1 environment variable is set.
+if os.getenv("NO_FETCH_REACTOR_DATA") == "1":
+    print("Skipping reactor operating data fetch 🔴")
+else:
+    REFRESH_INTERVAL = 3 * 60
+    threading.Thread(
+        target=lambda: every(REFRESH_INTERVAL, reactor_operating_data_job),
+        daemon=True,
+    ).start()
