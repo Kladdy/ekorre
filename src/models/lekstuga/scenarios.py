@@ -1,5 +1,6 @@
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Literal
 
 from mashumaro.codecs.yaml import yaml_decode
 from mashumaro.mixins.json import DataClassJSONMixin
@@ -7,7 +8,7 @@ from mashumaro.mixins.json import DataClassJSONMixin
 
 @dataclass
 class LekstugaCoreLayout:
-    map: list[list[int | None]]
+    map: list[list[int | Literal["_"]]]
 
 
 @dataclass
