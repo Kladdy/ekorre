@@ -2,6 +2,7 @@ from dataclasses import dataclass
 from enum import Enum, auto
 
 import numpy as np
+import plotly.graph_objects as go
 from nicegui import ui
 from scipy.signal import convolve2d
 
@@ -33,6 +34,7 @@ class Parameter(Enum):
     BURNUP = "Utbränning (år)"
     KINF = "Reaktivitetsvärde (kinf)"
     POWER = "Effektfördelning"
+    LEAKAGE = "Läckage (%)"
     # SDM = "Avstängningsmarginal (ASM, SDM)"
 
 
@@ -48,6 +50,7 @@ class BurnupStepData:
     burnup_map: np.ndarray
     kinf_map: np.ndarray
     power_map: np.ndarray
+    leakage: float
     # sdm_map: np.ndarray
 
 
@@ -60,7 +63,10 @@ class AnalysisData:
 
 def calculate_analysis_data(fuel_age_map: np.ndarray) -> AnalysisData:
     unique, counts = np.unique(fuel_age_map[fuel_age_map != None], return_counts=True)
-    age_counts = [AgeCount(age=int(u), count=int(c)) for u, c in zip(unique, counts)]
+    # Add to age counts even ages with 0 count
+    full_unique = np.arange(0, MAX_AGE + 1)
+    full_counts = [counts[unique.tolist().index(u)] if u in unique else 0 for u in full_unique]
+    age_counts = [AgeCount(age=int(u), count=int(c)) for u, c in zip(full_unique, full_counts)]
 
     total_fuel_elements = np.sum(counts)
 
@@ -78,8 +84,24 @@ def calculate_analysis_data(fuel_age_map: np.ndarray) -> AnalysisData:
 
     # sdm_map_boc
 
+    # Calcualte leakage by summing power in outer ring vs total power
+    total_power = np.nansum(power_map_boc)
+    outer_ring_power = np.nansum(
+        np.concatenate(
+            [
+                power_map_boc[0, :],
+                power_map_boc[-1, :],
+                power_map_boc[1:-1, 0],
+                power_map_boc[1:-1, -1],
+            ]
+        )
+    )
+    leakage_boc = (outer_ring_power / total_power) * 100 if total_power > 0 else 0.0
+
     burnup_step_data.append(
-        BurnupStepData(burnup=0.0, burnup_map=burnup_map_boc, kinf_map=kinf_map_boc, power_map=power_map_boc)
+        BurnupStepData(
+            burnup=0.0, burnup_map=burnup_map_boc, kinf_map=kinf_map_boc, power_map=power_map_boc, leakage=leakage_boc
+        )
     )
 
     for step in np.linspace(0, CYCLE_LENGTH, NUMBER_OF_STEPS)[1:]:
@@ -92,8 +114,22 @@ def calculate_analysis_data(fuel_age_map: np.ndarray) -> AnalysisData:
         power_map = power_map / np.nanmean(power_map)  # Normalize power map
         # sdm_map
 
+        # Calculate leakage by summing power in outer ring vs total power
+        total_power = np.nansum(power_map)
+        outer_ring_power = np.nansum(
+            np.concatenate(
+                [
+                    power_map[0, :],
+                    power_map[-1, :],
+                    power_map[1:-1, 0],
+                    power_map[1:-1, -1],
+                ]
+            )
+        )
+        leakage = (outer_ring_power / total_power) * 100 if total_power > 0 else 0.0
+
         burnup_step_data.append(
-            BurnupStepData(burnup=step, burnup_map=burnup_map, kinf_map=kinf_map, power_map=power_map)
+            BurnupStepData(burnup=step, burnup_map=burnup_map, kinf_map=kinf_map, power_map=power_map, leakage=leakage)
         )
 
     return AnalysisData(
@@ -102,104 +138,145 @@ def calculate_analysis_data(fuel_age_map: np.ndarray) -> AnalysisData:
 
 
 @ui.refreshable
+def fint_peak_plot(fuel_age_map: np.ndarray = None):
+    analysis_data = calculate_analysis_data(fuel_age_map)
+
+    x = [x.burnup for x in analysis_data.burnup_step_data]
+    y = [np.nanmax(x.power_map) for x in analysis_data.burnup_step_data]
+    avg_leakage = (np.mean([x.leakage for x in analysis_data.burnup_step_data]) - 23) / 7 * 100
+
+    with ui.column():
+
+        with ui.card().classes("w-158"):
+            ui.label("Effektformfaktor (nära 1 är bra)").classes("text-lg font-bold")
+
+            fig = go.Figure(
+                go.Scatter(
+                    x=x,
+                    y=y,
+                ),
+                layout=go.Layout(
+                    yaxis=dict(range=[1, max(np.nanmax(y), 1.3) + 0.05]),
+                    template="plotly_dark",
+                ),
+            )
+            fig.update_layout(
+                margin=dict(l=0, r=0, t=0, b=0), xaxis_title="Utbränning (år)", yaxis_title="Effektformfaktor"
+            )
+
+            ui.plotly(fig).classes("w-150 h-60")
+
+        with ui.card().classes("w-158"):
+            ui.label("Läckage över utbränningscykeln (nära 0 är bra)").classes("text-lg font-bold")
+            ui.circular_progress(
+                min(max(round(avg_leakage, 0), 0), 100),
+                min=0,
+                max=100,
+                size="lg",
+                color="green" if avg_leakage < 50 else "red",
+            )
+
+
+@ui.refreshable
 def analysis_data_presenter(fuel_age_map: np.ndarray = None):
     analysis_data = calculate_analysis_data(fuel_age_map)
 
-    with ui.card():
-        ui.label("Analys av bränsleåldrar").classes("text-lg font-bold")
-        ui.table(
-            rows=[
-                {
-                    "Ålder (år)": ac.age,
-                    "Antal laddade": ac.count,
-                    "Önskat antal": f"~{analysis_data.total_fuel_elements // (MAX_AGE+1)}",
-                }
-                for ac in analysis_data.age_counts
-            ],
-        )
+    with ui.column():
+        with ui.card().classes("w-108"):
+            # Burnup steps. Show a slider and a selectable parameter to show.
+            ui.label("Utbränningssteg").classes("text-lg font-bold")
 
-    with ui.card():
-        # Burnup steps. Show a slider and a selectable parameter to show.
-        ui.label("Utbränningssteg").classes("text-lg font-bold")
+            # Make these reactive variables
+            step_value, set_step = ui.state(0)
+            parameter_value, set_parameter = ui.state(Parameter.BURNUP.value)
 
-        # Make these reactive variables
-        step_value, set_step = ui.state(0)
-        parameter_value, set_parameter = ui.state(Parameter.BURNUP.value)
+            step_slider = ui.slider(
+                min=0,
+                max=len(analysis_data.burnup_step_data) - 1,
+                value=step_value,
+                step=1,
+                on_change=lambda e: set_step(e.value),
+            ).classes("w-64")
 
-        step_slider = ui.slider(
-            min=0,
-            max=len(analysis_data.burnup_step_data) - 1,
-            value=step_value,
-            step=1,
-            on_change=lambda e: set_step(e.value),
-        ).classes("w-64")
+            parameter_select = ui.select(
+                options=[(param.value) for param in Parameter if param != Parameter.LEAKAGE],
+                value=parameter_value,
+                on_change=lambda e: set_parameter(e.value),
+            ).classes("w-48")
 
-        parameter_select = ui.select(
-            options=[(param.value) for param in Parameter],
-            value=parameter_value,
-            on_change=lambda e: set_parameter(e.value),
-        ).classes("w-48")
+            @ui.refreshable
+            def display_core_map():
+                selected_parameter = parameter_value
+                step_index = step_value
 
-        @ui.refreshable
-        def display_core_map():
-            selected_parameter = parameter_value
-            step_index = step_value
+                parameter_display = ui.label("")
 
-            parameter_display = ui.label("")
+                match selected_parameter:
+                    case Parameter.BURNUP.value:
+                        parameter_values_map = analysis_data.burnup_step_data[step_index].burnup_map
+                    case Parameter.KINF.value:
+                        parameter_values_map = analysis_data.burnup_step_data[step_index].kinf_map
+                    case Parameter.POWER.value:
+                        parameter_values_map = analysis_data.burnup_step_data[step_index].power_map
+                    case _:
+                        raise ValueError("Okänd parameter vald")
 
-            match selected_parameter:
-                case Parameter.BURNUP.value:
-                    parameter_values_map = analysis_data.burnup_step_data[step_index].burnup_map
-                case Parameter.KINF.value:
-                    parameter_values_map = analysis_data.burnup_step_data[step_index].kinf_map
-                case Parameter.POWER.value:
-                    parameter_values_map = analysis_data.burnup_step_data[step_index].power_map
-                case _:
-                    raise ValueError("Okänd parameter vald")
+                parameter_display.text = (
+                    f"{selected_parameter} vid steg {step_index} "
+                    f"(utbränning {analysis_data.burnup_step_data[step_index].burnup:.2f} år)"
+                )
 
-            parameter_display.text = (
-                f"{selected_parameter} vid steg {step_index} "
-                f"(utbränning {analysis_data.burnup_step_data[step_index].burnup:.2f} år)"
-            )
-
-            with ui.card(align_items="center"):
-                for row in parameter_values_map:
-                    with ui.row():
-                        for val in row:
-                            # Calculate color based on value range
-                            if selected_parameter == Parameter.BURNUP.value:
-                                # Burnup from -2 to MAX_AGE + 2
-                                ratio = (val - (-2)) / (MAX_AGE + 2 + 1) if not np.isnan(val) else 0
-                                red = int(255 * ratio)
-                                green = int(255 * (1 - ratio))
-                                color = f"rgb({red}, {green}, 0)"
-                            elif selected_parameter == Parameter.KINF.value:
-                                # kinf from 0.5 to 1.3
-                                ratio = (val - 0.5) / (1.3 - 0.5) if not np.isnan(val) else 0
-                                red = int(255 * (1 - ratio))
-                                green = int(255 * ratio)
-                                color = f"rgb({red}, {green}, 0)"
-                            elif selected_parameter == Parameter.POWER.value:
-                                # power from 0.5 to 1.5 (approx)
-                                ratio = (val - 0.5) / (1.5 - 0.5) if not np.isnan(val) else 0
-                                red = int(255 * (1 - ratio))
-                                green = int(255 * ratio)
-                                color = f"rgb({red}, {green}, 0)"
-                            else:
-                                color = "rgb(200, 200, 200)"
-                            with (
-                                ui.card()
-                                .classes(f"w-8 h-8 p-0 grid place-items-center rounded-sm")
-                                .style(f"background-color: {color};") as column_card
-                            ):
-                                if not np.isnan(val):
-                                    ui.label(f"{val:.2f}").classes("text-xs rounded-sm").style(
-                                        "background-color: rgba(40, 40, 40, 0.4);"
-                                    )
+                with ui.card(align_items="center"):
+                    for row in parameter_values_map:
+                        with ui.row():
+                            for val in row:
+                                # Calculate color based on value range
+                                if selected_parameter == Parameter.BURNUP.value:
+                                    # Burnup from -2 to MAX_AGE + 2
+                                    ratio = (val - (-2)) / (MAX_AGE + 2 + 1) if not np.isnan(val) else 0
+                                    red = int(255 * ratio)
+                                    green = int(255 * (1 - ratio))
+                                    color = f"rgb({red}, {green}, 0)"
+                                elif selected_parameter == Parameter.KINF.value:
+                                    # kinf from 0.5 to 1.3
+                                    ratio = (val - 0.5) / (1.3 - 0.5) if not np.isnan(val) else 0
+                                    red = int(255 * (1 - ratio))
+                                    green = int(255 * ratio)
+                                    color = f"rgb({red}, {green}, 0)"
+                                elif selected_parameter == Parameter.POWER.value:
+                                    # power from 0.5 to 1.5 (approx)
+                                    ratio = (val - 0.5) / (1.5 - 0.5) if not np.isnan(val) else 0
+                                    red = int(255 * (1 - ratio))
+                                    green = int(255 * ratio)
+                                    color = f"rgb({red}, {green}, 0)"
                                 else:
-                                    column_card.set_visibility(False)
+                                    color = "rgb(200, 200, 200)"
+                                with (
+                                    ui.card()
+                                    .classes(f"w-8 h-8 p-0 grid place-items-center rounded-sm")
+                                    .style(f"background-color: {color};") as column_card
+                                ):
+                                    if not np.isnan(val):
+                                        ui.label(f"{val:.2f}").classes("text-xs rounded-sm").style(
+                                            "background-color: rgba(40, 40, 40, 0.4);"
+                                        )
+                                    else:
+                                        column_card.set_visibility(False)
 
-        display_core_map()
+            display_core_map()
+
+        with ui.card().classes("w-108"):
+            ui.label("Analys av bränsleåldrar").classes("text-lg font-bold")
+            ui.table(
+                rows=[
+                    {
+                        "Ålder (år)": ac.age,
+                        "Antal laddade": ac.count,
+                        "Önskat antal": f"~{analysis_data.total_fuel_elements // (MAX_AGE+1)}",
+                    }
+                    for ac in analysis_data.age_counts
+                ],
+            )
 
 
 @ui.page("/lekstuga", title="Lekstuga | Ekorre")
@@ -207,8 +284,6 @@ def lekstuga():
 
     scenarios = LekstugaScenario.load_many_from_file("data/lekstuga/scenarios.yaml")
     scenario = scenarios[0]
-
-    parameter = Parameter.BURNUP
 
     # Layout map contains "_" for empty slots. Create a NxN index map with None for empty slots.
     # The layout map is currently a list of lists of int (or "_"), where the int represents the index of the fuel assembly.
@@ -223,46 +298,75 @@ def lekstuga():
 
     labels = {}
 
-    def adjust_fuel_age(row: int, col: int, delta: int):
+    def adjust_fuel_age(row: int, col: int, delta: int, core_size: int):
         nonlocal fuel_age_map
         if index_map[row, col] is not None:
             new_age = fuel_age_map[row, col] + delta
             if 0 <= new_age <= MAX_AGE:
-                fuel_age_map[row, col] = new_age
-                labels[(row, col)].text = f"{index_map[row, col]+1} | {new_age} år"
+
+                # Adjust the quarter core rotational symmetry positions
+                if core_size % 2 == 0:
+                    sym_positions = [
+                        (row, col),
+                        (col, core_size - 1 - row),
+                        (core_size - 1 - row, core_size - 1 - col),
+                        (core_size - 1 - col, row),
+                    ]
+                else:
+                    sym_positions = [
+                        (row, col),
+                        (col, core_size - 1 - row),
+                        (core_size - 1 - row, core_size - 1 - col),
+                        (core_size - 1 - col, row),
+                    ]
+
+                for r, c in sym_positions:
+                    fuel_age_map[r, c] = new_age
+                    labels[(r, c)].text = f"{index_map[r, c]+1} | {new_age} år"
                 analysis_data_presenter.refresh()
+                fint_peak_plot.refresh()
                 ui.notify(
-                    f"Bränsle {index_map[row, col]+1} justerades till {new_age} år", group="fuel_age_adjust_success"
+                    f"Bränsle {index_map[row, col]+1} (och symmetrier) justerades till {new_age} år",
+                    group="fuel_age_adjust_success",
                 )
             else:
                 ui.notify(
                     f"Bränsleåldern måste vara mellan 0 och {MAX_AGE} år", color="red", group="fuel_age_adjust_fail"
                 )
 
-    with ui.card(align_items="center"):
+    with ui.row():
 
-        # Map
-        for row_idx, row in enumerate(index_map):
-            with ui.row():
-                for col_idx, col in enumerate(row):
-                    with ui.card().classes("w-18 h-18 grid grid-rows-3 p-0 pb-2 pl-1") as column_card:
-                        if col is not None:
-                            with ui.row():
-                                ui.button(
-                                    icon="add",
-                                    on_click=lambda r=row_idx, c=col_idx: adjust_fuel_age(r, c, 1),
-                                    color="green",
-                                ).classes("w-16 h-5 min-h-0 py-0 text-xs")
-                            with ui.row():
-                                lbl = ui.label(f"{col+1} | {fuel_age_map[row_idx, col_idx]} år")
-                                labels[(row_idx, col_idx)] = lbl  # store label reference
-                            with ui.row():
-                                ui.button(
-                                    icon="remove",
-                                    on_click=lambda r=row_idx, c=col_idx: adjust_fuel_age(r, c, -1),
-                                    color="red",
-                                ).classes("w-16 h-5 min-h-0 py-0 text-xs")
-                        else:
-                            column_card.set_visibility(False)
+        with ui.column():
+            with ui.card(align_items="center"):
 
-    analysis_data_presenter(fuel_age_map)
+                # Map
+                for row_idx, row in enumerate(index_map):
+                    # Classes to make sure cards dont wrap but rather overflow
+                    with ui.row().classes("flex-nowrap "):
+                        for col_idx, col in enumerate(row):
+                            with ui.card().classes("w-18 h-18 grid grid-rows-3 p-0 pb-2 pl-1") as column_card:
+                                if col is not None:
+                                    with ui.row():
+                                        ui.button(
+                                            icon="add",
+                                            on_click=lambda r=row_idx, c=col_idx, rw=row: adjust_fuel_age(
+                                                r, c, 1, len(rw)
+                                            ),
+                                            color="green",
+                                        ).classes("w-16 h-5 min-h-0 py-0 text-xs")
+                                    with ui.row():
+                                        lbl = ui.label(f"{col+1} | {fuel_age_map[row_idx, col_idx]} år")
+                                        labels[(row_idx, col_idx)] = lbl  # store label reference
+                                    with ui.row():
+                                        ui.button(
+                                            icon="remove",
+                                            on_click=lambda r=row_idx, c=col_idx, rw=row: adjust_fuel_age(
+                                                r, c, -1, len(rw)
+                                            ),
+                                            color="red",
+                                        ).classes("w-16 h-5 min-h-0 py-0 text-xs")
+                                else:
+                                    column_card.set_visibility(False)
+            fint_peak_plot(fuel_age_map)
+
+        analysis_data_presenter(fuel_age_map)
