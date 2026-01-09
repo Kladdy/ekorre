@@ -1,5 +1,6 @@
 import os
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Literal
 
 from influxdb_client import InfluxDBClient, Point
@@ -69,6 +70,31 @@ def read_from_influx(
     client.close()
 
     return [record for table in result for record in table.records]
+
+
+def write_all_influx_data_to_csv(bucket: str, measurement: str, field: str, filename: str | Path):
+    client = get_influx_client()
+    query_api = client.query_api()
+
+    flux = f"""
+    from(bucket: "{get_influx_bucket(bucket)}")
+      |> range(start: 0)
+      {f'|> filter(fn: (r) => r._measurement == "{measurement}")' if measurement else ''}
+      {f'|> filter(fn: (r) => r._field == "{field}")' if field else ''}
+    """
+
+    result = query_api.query_csv(flux)
+    client.close()
+
+    if not isinstance(filename, Path):
+        filename = Path(filename)
+
+    results_as_values = result.to_values()
+
+    filename.parent.mkdir(parents=True, exist_ok=True)
+    filename.write_text("\n".join([",".join(x) for x in results_as_values]))
+
+    return len(results_as_values)  # Return the count
 
 
 def get_datetime_of_extreme(bucket: str, measurement: str, extreme: Literal["first", "last"]) -> datetime | None:

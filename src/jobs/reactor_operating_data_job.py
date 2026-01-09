@@ -3,12 +3,17 @@ import os
 import threading
 import time
 from datetime import datetime
+from pathlib import Path
 
 from bs4 import BeautifulSoup
 from influxdb_client import Point
 from requests import Session
 
-from influxdb import get_datetime_of_extreme, write_to_influx
+from influxdb import (
+    get_datetime_of_extreme,
+    write_all_influx_data_to_csv,
+    write_to_influx,
+)
 from models.reactor import (
     REACTOR_OPERATING_DATA_BUCKET,
     REACTOR_OPERATING_DATA_MEASUREMENT,
@@ -95,12 +100,30 @@ def reactor_operating_data_job():
     write_to_influx(points, REACTOR_OPERATING_DATA_BUCKET)
 
 
+def export_all_data_job():
+    print("Export all data 🕒")
+
+    filepath = Path("reactor_operating_data_export.csv")
+
+    count = write_all_influx_data_to_csv(
+        REACTOR_OPERATING_DATA_BUCKET, REACTOR_OPERATING_DATA_MEASUREMENT, "MW", filepath
+    )
+
+    print(f"Exported data {count} data points to file {filepath} 🟢")
+
+
 # Check if the NO_FETCH_REACTOR_DATA=1 environment variable is set.
 if os.getenv("NO_FETCH_REACTOR_DATA") == "1":
     print("Skipping reactor operating data fetch 🔴")
 else:
-    REFRESH_INTERVAL = 3 * 60
+    REFRESH_INTERVAL_FETCH_DATA = 3 * 60  # Every 3 minutes
     threading.Thread(
-        target=lambda: every(REFRESH_INTERVAL, reactor_operating_data_job),
+        target=lambda: every(REFRESH_INTERVAL_FETCH_DATA, reactor_operating_data_job),
+        daemon=True,
+    ).start()
+
+    REFRESH_INTERVAL_EXPORT_DATA = 12 * 60 * 60  # Every 12 hours
+    threading.Thread(
+        target=lambda: every(REFRESH_INTERVAL_EXPORT_DATA, export_all_data_job),
         daemon=True,
     ).start()
