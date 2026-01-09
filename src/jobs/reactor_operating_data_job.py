@@ -103,7 +103,7 @@ def reactor_operating_data_job():
 def export_all_data_job():
     print("Export all data 🕒")
 
-    filepath = Path("reactor_operating_data_export.csv")
+    filepath = Path("data_export/reactor_operating_data_export.csv")
 
     count = write_all_influx_data_to_csv(
         REACTOR_OPERATING_DATA_BUCKET, REACTOR_OPERATING_DATA_MEASUREMENT, "MW", filepath
