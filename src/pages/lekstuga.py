@@ -297,6 +297,15 @@ def lekstuga():
     fuel_age_map[index_map == None] = None
 
     labels = {}
+    buttons = {}
+
+    def update_button_visibility(row: int, col: int):
+        """Hide add/remove buttons when the fuel age hits the bounds."""
+        if (row, col) not in buttons:
+            return
+        age = fuel_age_map[row, col]
+        buttons[(row, col)]["add"].set_visibility(age < MAX_AGE)
+        buttons[(row, col)]["remove"].set_visibility(age > 0)
 
     def adjust_fuel_age(row: int, col: int, delta: int, core_size: int):
         nonlocal fuel_age_map
@@ -323,6 +332,7 @@ def lekstuga():
                 for r, c in sym_positions:
                     fuel_age_map[r, c] = new_age
                     labels[(r, c)].text = f"{index_map[r, c]+1} | {new_age} år"
+                    update_button_visibility(r, c)
                 analysis_data_presenter.refresh()
                 fint_peak_plot.refresh()
                 ui.notify(
@@ -347,7 +357,7 @@ def lekstuga():
                             with ui.card().classes("w-18 h-18 grid grid-rows-3 p-0 pb-2 pl-1") as column_card:
                                 if col is not None:
                                     with ui.row():
-                                        ui.button(
+                                        add_btn = ui.button(
                                             icon="add",
                                             on_click=lambda r=row_idx, c=col_idx, rw=row: adjust_fuel_age(
                                                 r, c, 1, len(rw)
@@ -358,13 +368,15 @@ def lekstuga():
                                         lbl = ui.label(f"{col+1} | {fuel_age_map[row_idx, col_idx]} år")
                                         labels[(row_idx, col_idx)] = lbl  # store label reference
                                     with ui.row():
-                                        ui.button(
+                                        remove_btn = ui.button(
                                             icon="remove",
                                             on_click=lambda r=row_idx, c=col_idx, rw=row: adjust_fuel_age(
                                                 r, c, -1, len(rw)
                                             ),
                                             color="red",
                                         ).classes("w-16 h-5 min-h-0 py-0 text-xs")
+                                    buttons[(row_idx, col_idx)] = {"add": add_btn, "remove": remove_btn}
+                                    update_button_visibility(row_idx, col_idx)
                                 else:
                                     column_card.set_visibility(False)
             fint_peak_plot(fuel_age_map)
