@@ -179,3 +179,4 @@ cython_debug/
 
 # venv
 *-venv
+data_export/reactor_operating_data_export.csv

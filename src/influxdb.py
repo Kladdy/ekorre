@@ -22,6 +22,8 @@ def get_influx_client():
     token = get_secret("INFLUX_TOKEN")
     org = os.getenv("INFLUX_ORG")
 
+    print(f"Connecting to InfluxDB at {url} with org '{org}'")
+
     client = InfluxDBClient(url=url, token=token, org=org)
 
     # Ensure organization exists
@@ -33,7 +35,8 @@ def get_influx_client():
         if not org_exists:
             orgs_api.create_organization(name=org)
     except Exception as e:
-        print(f"Warning: Could not verify/create organization: {e}")
+        print(f"Warning: Could not verify/create organization {org}: {e}")
+        raise e
 
     return client
 
@@ -53,9 +56,11 @@ def ensure_bucket_exists(client: InfluxDBClient, bucket_name: str):
             buckets_api.create_bucket(bucket_name=full_bucket_name)
     except Exception as e:
         print(f"Warning: Could not verify/create bucket {full_bucket_name}: {e}")
+        raise e
 
 
 def write_to_influx(data: Point | list[Point], bucket: str):
+    print("InfluxDB: Writing data to bucket", bucket)
     client = get_influx_client()
     ensure_bucket_exists(client, bucket)
     with client.write_api(write_options=SYNCHRONOUS) as write_api:
@@ -71,6 +76,7 @@ def read_from_influx(
     stop: datetime | None = None,
     tags: dict = None,
 ):
+    print(f"InfluxDB: Reading data from bucket '{bucket}', measurement '{measurement}', field '{field}'")
     client = get_influx_client()
     ensure_bucket_exists(client, bucket)
     query_api = client.query_api()
@@ -99,6 +105,9 @@ def read_from_influx(
 
 
 def write_all_influx_data_to_csv(bucket: str, measurement: str, field: str, filename: str | Path):
+    print(
+        f"InfluxDB: Exporting data from bucket '{bucket}', measurement '{measurement}', field '{field}' to '{filename}'"
+    )
     client = get_influx_client()
     ensure_bucket_exists(client, bucket)
     query_api = client.query_api()
@@ -125,6 +134,7 @@ def write_all_influx_data_to_csv(bucket: str, measurement: str, field: str, file
 
 
 def get_datetime_of_extreme(bucket: str, measurement: str, extreme: Literal["first", "last"]) -> datetime | None:
+    print(f"InfluxDB: Getting {extreme} datetime from bucket '{bucket}', measurement '{measurement}'")
     client = get_influx_client()
     ensure_bucket_exists(client, bucket)
     query_api = client.query_api()

@@ -13,3 +13,5 @@ python3 src/main.py
 
 # export NICEGUI_PORT="12345"; python3 src/main.py
 # export NICEGUI_PORT="12345"; export NO_FETCH_REACTOR_DATA="1"; python3 src/main.py
+
+# export NICEGUI_PORT="12345"; export INFLUX_ORG="my-org"; export INFLUX_ENV="dev"; export INFLUX_URL="http://kowalski.te2.local:8086"; export INFLUX_TOKEN=""; python3 src/main.py
