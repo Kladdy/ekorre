@@ -43,8 +43,21 @@ def get_influx_bucket(bucket_name: str):
     return f"{bucket_name}-{influx_env}"
 
 
+def ensure_bucket_exists(client: InfluxDBClient, bucket_name: str):
+    """Ensure the bucket exists, creating it if necessary."""
+    full_bucket_name = get_influx_bucket(bucket_name)
+    try:
+        buckets_api = client.buckets_api()
+        buckets = buckets_api.find_bucket_by_name(full_bucket_name)
+        if buckets is None:
+            buckets_api.create_bucket(bucket_name=full_bucket_name)
+    except Exception as e:
+        print(f"Warning: Could not verify/create bucket {full_bucket_name}: {e}")
+
+
 def write_to_influx(data: Point | list[Point], bucket: str):
     client = get_influx_client()
+    ensure_bucket_exists(client, bucket)
     with client.write_api(write_options=SYNCHRONOUS) as write_api:
         write_api.write(bucket=get_influx_bucket(bucket), record=data)
     client.close()
@@ -59,6 +72,7 @@ def read_from_influx(
     tags: dict = None,
 ):
     client = get_influx_client()
+    ensure_bucket_exists(client, bucket)
     query_api = client.query_api()
 
     tag_filters = []
@@ -86,6 +100,7 @@ def read_from_influx(
 
 def write_all_influx_data_to_csv(bucket: str, measurement: str, field: str, filename: str | Path):
     client = get_influx_client()
+    ensure_bucket_exists(client, bucket)
     query_api = client.query_api()
 
     flux = f"""
@@ -111,6 +126,7 @@ def write_all_influx_data_to_csv(bucket: str, measurement: str, field: str, file
 
 def get_datetime_of_extreme(bucket: str, measurement: str, extreme: Literal["first", "last"]) -> datetime | None:
     client = get_influx_client()
+    ensure_bucket_exists(client, bucket)
     query_api = client.query_api()
 
     flux = f"""
