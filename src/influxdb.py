@@ -18,11 +18,23 @@ def get_secret(key: str) -> str:
 
 
 def get_influx_client():
-    client = InfluxDBClient(
-        url=os.getenv("INFLUX_URL"),
-        token=get_secret("INFLUX_TOKEN"),
-        org=os.getenv("INFLUX_ORG"),
-    )
+    url = os.getenv("INFLUX_URL")
+    token = get_secret("INFLUX_TOKEN")
+    org = os.getenv("INFLUX_ORG")
+
+    client = InfluxDBClient(url=url, token=token, org=org)
+
+    # Ensure organization exists
+    try:
+        orgs_api = client.organizations_api()
+        orgs = orgs_api.find_organizations()
+        org_exists = any(o.name == org for o in orgs)
+
+        if not org_exists:
+            orgs_api.create_organization(name=org)
+    except Exception as e:
+        print(f"Warning: Could not verify/create organization: {e}")
+
     return client
 
 
