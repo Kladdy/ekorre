@@ -81,7 +81,10 @@ def reactor_operating_data_job():
                 )
             )
 
-            print(point_datetime, datetime_of_last)
+            # if datetime_of_last has no timezone, set it to the same as point_datetime
+            if datetime_of_last.tzinfo is None:
+                datetime_of_last = datetime_of_last.replace(tzinfo=point_datetime.tzinfo)
+                print(f"Warning: datetime_of_last had no timezone, setting to {datetime_of_last.tzinfo}")
 
             # Check if the point already exists in InfluxDB
             if point_datetime.replace(microsecond=0) > datetime_of_last.replace(microsecond=0):
