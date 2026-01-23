@@ -81,6 +81,8 @@ def reactor_operating_data_job():
                 )
             )
 
+            print(point_datetime, datetime_of_last)
+
             # Check if the point already exists in InfluxDB
             if point_datetime.replace(microsecond=0) > datetime_of_last.replace(microsecond=0):
                 points.append(point)
