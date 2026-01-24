@@ -6,9 +6,6 @@ from typing import Literal
 from influxdb_client import InfluxDBClient, Point
 from influxdb_client.client.write_api import SYNCHRONOUS
 
-global already_checked_org
-already_checked_org = False
-
 
 def get_secret(key: str) -> str:
     # Check for _FILE suffix first
@@ -21,7 +18,6 @@ def get_secret(key: str) -> str:
 
 
 def get_influx_client():
-    global already_checked_org
     url = os.getenv("INFLUX_URL")
     token = get_secret("INFLUX_TOKEN")
     org = os.getenv("INFLUX_ORG")
@@ -31,10 +27,6 @@ def get_influx_client():
     client = InfluxDBClient(url=url, token=token, org=org)
 
     # Ensure organization exists
-    if already_checked_org:
-        print(f"InfluxDB: Organization '{org}' already verified")
-        return client
-
     try:
         orgs_api = client.organizations_api()
         orgs = orgs_api.find_organizations()
@@ -42,9 +34,6 @@ def get_influx_client():
 
         if not org_exists:
             orgs_api.create_organization(name=org)
-        else:
-            print(f"InfluxDB: Organization '{org}' already exists")
-            already_checked_org = True
     except Exception as e:
         print(f"Warning: Could not verify/create organization {org}: {e}")
         raise e
