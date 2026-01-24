@@ -17,18 +17,27 @@ def get_secret(key: str) -> str:
     return os.environ.get(key)
 
 
+_client = None
+_verified_buckets = set()
+
+
 def get_influx_client():
+    global _client
+
+    if _client is not None:
+        return _client
+
     url = os.getenv("INFLUX_URL")
     token = get_secret("INFLUX_TOKEN")
-    org = os.getenv("INFLUX_ORG")
+    org = str(os.getenv("INFLUX_ORG"))
 
     print(f"Connecting to InfluxDB at {url} with org '{org}'")
 
-    client = InfluxDBClient(url=url, token=token, org=org)
+    _client = InfluxDBClient(url=url, token=token, org=org)
 
     # Ensure organization exists
     try:
-        orgs_api = client.organizations_api()
+        orgs_api = _client.organizations_api()
         orgs = orgs_api.find_organizations()
         org_exists = any(o.name == org for o in orgs)
 
@@ -38,7 +47,7 @@ def get_influx_client():
         print(f"Warning: Could not verify/create organization {org}: {e}")
         raise e
 
-    return client
+    return _client
 
 
 def get_influx_bucket(bucket_name: str):
@@ -49,11 +58,14 @@ def get_influx_bucket(bucket_name: str):
 def ensure_bucket_exists(client: InfluxDBClient, bucket_name: str):
     """Ensure the bucket exists, creating it if necessary."""
     full_bucket_name = get_influx_bucket(bucket_name)
+    if full_bucket_name in _verified_buckets:
+        return
     try:
         buckets_api = client.buckets_api()
         buckets = buckets_api.find_bucket_by_name(full_bucket_name)
         if buckets is None:
             buckets_api.create_bucket(bucket_name=full_bucket_name)
+        _verified_buckets.add(full_bucket_name)
     except Exception as e:
         print(f"Warning: Could not verify/create bucket {full_bucket_name}: {e}")
         raise e
@@ -65,7 +77,6 @@ def write_to_influx(data: Point | list[Point], bucket: str):
     ensure_bucket_exists(client, bucket)
     with client.write_api(write_options=SYNCHRONOUS) as write_api:
         write_api.write(bucket=get_influx_bucket(bucket), record=data)
-    client.close()
 
 
 def read_from_influx(
@@ -99,7 +110,6 @@ def read_from_influx(
     """
 
     result = query_api.query(flux)
-    client.close()
 
     return [record for table in result for record in table.records]
 
@@ -120,7 +130,6 @@ def write_all_influx_data_to_csv(bucket: str, measurement: str, field: str, file
     """
 
     result = query_api.query_csv(flux)
-    client.close()
 
     if not isinstance(filename, Path):
         filename = Path(filename)
@@ -147,7 +156,6 @@ def get_datetime_of_extreme(bucket: str, measurement: str, extreme: Literal["fir
     """
 
     result = query_api.query(flux)
-    client.close()
 
     if result:
         # Extract the last timestamp from the result
