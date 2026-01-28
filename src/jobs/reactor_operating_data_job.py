@@ -127,7 +127,7 @@ else:
         daemon=True,
     ).start()
 
-    REFRESH_INTERVAL_EXPORT_DATA = 12 * 60 * 60  # Every 12 hours
+    REFRESH_INTERVAL_EXPORT_DATA = 1 * 60 * 60  # Every 1 hour
     threading.Thread(
         target=lambda: every(REFRESH_INTERVAL_EXPORT_DATA, export_all_data_job),
         daemon=True,
