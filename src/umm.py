@@ -165,38 +165,50 @@ def _extract_event_from_description_html(description_html: str) -> Iterable[UmmE
     return events
 
 
-def fetch_umm_events(
-    *,
-    event_start_utc: datetime,
-    event_stop_utc: datetime,
-    limit: int = 500,
-) -> list[UmmEvent]:
-    """Fetch Nord Pool UMM RSS feed and extract unavailability events.
+def build_umm_rss_url(*, event_stop_utc: datetime, limit: int = 500) -> str:
+    """Build Nord Pool UMM RSS URL.
 
-    We fetch for Swedish nuclear producers (Forsmark/Ringhals) and filter out
-    cancelled/dismissed messages.
+    NOTE: Sigge requested eventStartDate to be hardcoded to the earliest date the
+    site has data for (2024-04-09), and to keep that exact value (as in the
+    example URL).
     """
 
-    assert event_start_utc.tzinfo is not None
     assert event_stop_utc.tzinfo is not None
 
-    def to_iso_z(dt: datetime, *, end: bool = False) -> str:
-        # Nord Pool examples use millisecond precision and trailing Z.
-        # Use .000Z for start and .999Z for end for inclusive-ish filtering.
-        dt_utc = dt.astimezone(pytz.UTC)
-        base = dt_utc.strftime("%Y-%m-%dT%H:%M:%S")
-        return f"{base}.{'999' if end else '000'}Z"
+    # Keep EXACT start date (as in the example URL): 2024-04-09T22:00:00.000Z
+    event_start_encoded = "2024-04-09T22%3A00%3A00.000Z"
 
-    url = (
+    dt_utc = event_stop_utc.astimezone(pytz.UTC)
+    event_stop = dt_utc.strftime("%Y-%m-%dT%H:%M:%S") + ".999Z"
+    event_stop_encoded = requests.utils.quote(event_stop, safe="")
+
+    # Keep publicationStartDate exactly as in the example URL too
+    publication_start_encoded = "1969-12-31T23%3A00%3A00.000Z"
+
+    return (
         "https://ummrss.nordpoolgroup.com/messages/"
         "?areas=10Y1001A1001A46L"
         "&companies=N02101"
         "&companies=N01256"
         "&fuelTypes=14"
-        f"&eventStartDate={requests.utils.quote(to_iso_z(event_start_utc, end=False))}"
-        f"&eventStopDate={requests.utils.quote(to_iso_z(event_stop_utc, end=True))}"
+        f"&publicationStartDate={publication_start_encoded}"
+        f"&eventStartDate={event_start_encoded}"
+        f"&eventStopDate={event_stop_encoded}"
         f"&limit={limit}"
     )
+
+
+def fetch_umm_events(
+    *,
+    event_stop_utc: datetime,
+    limit: int = 500,
+) -> tuple[list[UmmEvent], str]:
+    """Fetch Nord Pool UMM RSS feed and extract unavailability events.
+
+    Returns: (events, rss_url_used)
+    """
+
+    url = build_umm_rss_url(event_stop_utc=event_stop_utc, limit=limit)
 
     resp = requests.get(url, timeout=20)
     resp.raise_for_status()
@@ -227,4 +239,4 @@ def fetch_umm_events(
 
     # Sort for stable output
     events.sort(key=lambda e: (e.unit_label, e.start))
-    return events
+    return events, url

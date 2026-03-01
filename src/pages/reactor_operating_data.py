@@ -62,11 +62,11 @@ async def reactor_operating_data():
     umm_events = []
     umm_error: str | None = None
     try:
-        umm_events = await asyncio.to_thread(
+        umm_events, umm_url = await asyncio.to_thread(
             fetch_umm_events,
-            event_start_utc=start_interval_utc,
-            event_stop_utc=stop_interval_utc,
+            event_stop_utc=datetime.now(timezone.utc),
         )
+        print(f"UMM RSS URL: {umm_url}")
         print(f"Fetched {len(umm_events)} UMM events")
     except Exception as e:
         umm_error = str(e)
