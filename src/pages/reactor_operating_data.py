@@ -292,6 +292,7 @@ async def reactor_operating_data():
                 {"name": "stop", "label": "Stop", "field": "stop", "align": "left"},
                 {"name": "available_mw", "label": "Available (MW)", "field": "available_mw", "align": "right"},
                 {"name": "unavailable_mw", "label": "Unavailable (MW)", "field": "unavailable_mw", "align": "right"},
+                {"name": "umm", "label": "", "field": "umm", "align": "left"},
             ]
 
             if len(rows) == 0:
@@ -300,39 +301,26 @@ async def reactor_operating_data():
                 table = ui.table(columns=columns, rows=rows, row_key="_id").classes("w-fit")
                 table.props("flat")
 
-                # Make each row clickable to open the UMM message in a new tab
-                def _extract_row_from_table_event_args(args):
-                    # Quasar emits different shapes depending on version/options.
-                    # We try a few common ones:
-                    # - {'row': {...}, 'pageIndex': 0}
-                    # - [{...row...}, index]
-                    if args is None:
-                        return None
-                    if isinstance(args, dict):
-                        if isinstance(args.get("row"), dict):
-                            return args.get("row")
-                        return args
-                    if isinstance(args, list) and len(args) > 0:
-                        if isinstance(args[0], dict):
-                            return args[0]
-                    return None
-
-                def _on_row_click(e: events.GenericEventArguments):
-                    # Helpful debug in server logs (can be removed later)
-                    print(f"rowClick args: {e.args}")
-                    try:
-                        row = _extract_row_from_table_event_args(e.args)
-                        link = (row or {}).get("link")
-                        if link:
-                            try:
-                                ui.open(link, new_tab=True)  # type: ignore[attr-defined]
-                            except Exception:
-                                ui.navigate.to(link, new_tab=True)  # type: ignore[attr-defined]
-                    except Exception as ex:
-                        print(f"Row click failed: {ex}")
-
-                # NiceGUI/Quasar table uses 'rowClick'
-                table.on("rowClick", _on_row_click)
+                # Add a subtle per-row button which opens the UMM link in a new tab.
+                # Using a plain anchor/q-btn avoids server-side click handling brittleness.
+                table.add_slot(
+                    "body-cell-umm",
+                    r'''
+<q-td :props="props">
+  <q-btn
+    dense
+    flat
+    size="sm"
+    color="grey-6"
+    icon="open_in_new"
+    label="UMM"
+    :href="props.row.link"
+    target="_blank"
+    type="a"
+  />
+</q-td>
+''',
+                )
         except Exception as e:
             ui.label(f"UMM table error: {e}").classes("text-xs font-mono text-red-400")
 
