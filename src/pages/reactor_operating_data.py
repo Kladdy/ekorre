@@ -162,7 +162,7 @@ async def reactor_operating_data():
                         x=x,
                         y=y,
                         name="",
-                        hovertemplate="%{y:.1f}%<br>%{x}<extra></extra>",
+                        hovertemplate="%{y:.1f} %<br>%{x}<extra></extra>",
                     ),
                     layout=go.Layout(
                         yaxis=dict(range=[0, max_y_axis]),
