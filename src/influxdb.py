@@ -86,6 +86,8 @@ def read_from_influx(
     start: datetime | None = None,
     stop: datetime | None = None,
     tags: dict = None,
+    aggregate_every: str | None = None,
+    aggregate_fn: str = "last",
 ):
     print(
         f"InfluxDB: Reading data from bucket '{get_influx_bucket(bucket)}', measurement '{measurement}', field '{field}'"
@@ -103,12 +105,20 @@ def read_from_influx(
     start_range = start.astimezone(timezone.utc).isoformat() if start else 0
     stop_range = stop.astimezone(timezone.utc).isoformat() if stop else "now()"
 
+    aggregate_window = ""
+    if aggregate_every:
+        # Downsample to avoid huge payloads in the UI for long time ranges
+        aggregate_window = (
+            f"|> aggregateWindow(every: {aggregate_every}, fn: {aggregate_fn}, createEmpty: false)"
+        )
+
     flux = f"""
     from(bucket: "{get_influx_bucket(bucket)}")
       |> range(start: {start_range}, stop: {stop_range})
       {f'|> filter(fn: (r) => r._measurement == "{measurement}")' if measurement else ''}
       {f'|> filter(fn: (r) => r._field == "{field}")' if field else ''}
       {tag_filters}
+      {aggregate_window}
     """
 
     result = query_api.query(flux)
