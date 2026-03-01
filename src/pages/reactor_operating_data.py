@@ -254,6 +254,7 @@ async def reactor_operating_data():
                         "stop": ev_stop.strftime("%Y-%m-%d %H:%M"),
                         "available_mw": "" if ev.available_mw is None else int(round(ev.available_mw)),
                         "unavailable_mw": "" if ev.unavailable_mw is None else int(round(ev.unavailable_mw)),
+                        "link": ev.link or "",
                     }
                 )
 
@@ -265,6 +266,7 @@ async def reactor_operating_data():
                 {"name": "stop", "label": "Stop", "field": "stop", "align": "left"},
                 {"name": "available_mw", "label": "Available (MW)", "field": "available_mw", "align": "right"},
                 {"name": "unavailable_mw", "label": "Unavailable (MW)", "field": "unavailable_mw", "align": "right"},
+                {"name": "link", "label": "Link", "field": "link", "align": "left"},
             ]
 
             if len(rows) == 0:
