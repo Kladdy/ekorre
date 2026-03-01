@@ -199,6 +199,15 @@ async def reactor_operating_data():
                         if ev.available_mw is not None and float(ev.available_mw) == 0.0:
                             fill = "red"
 
+                        fig.add_vrect(
+                            x0=ev_start,
+                            x1=ev_stop,
+                            fillcolor=fill,
+                            opacity=0.18,
+                            line_width=0,
+                            layer="below",
+                        )
+
                         hover = "UMM"
                         if ev.unavailable_mw is not None:
                             hover = f"Unavailable: {int(round(ev.unavailable_mw))} MW"
@@ -206,8 +215,8 @@ async def reactor_operating_data():
                             hover += f"<br>Available: {int(round(ev.available_mw))} MW"
                         hover += f"<br>{ev_start.strftime('%Y-%m-%d %H:%M')} → {ev_stop.strftime('%Y-%m-%d %H:%M')}"
 
-                        # Use a real filled trace (not a shape) for the visible box.
-                        # Shapes (vrect) don't participate in hover; traces do.
+                        # Hover support: prefer full-height polygon hover; keep y=0 line as fallback.
+                        # (Plotly sometimes doesn't trigger hover on fully transparent fills.)
                         fig.add_trace(
                             go.Scatter(
                                 x=[ev_start, ev_start, ev_stop, ev_stop, ev_start],
@@ -215,9 +224,21 @@ async def reactor_operating_data():
                                 mode="lines",
                                 fill="toself",
                                 line=dict(width=0, color="rgba(0,0,0,0)"),
-                                fillcolor=fill,
-                                opacity=0.18,
+                                fillcolor="rgba(0,0,0,0)",
+                                opacity=0.01,  # must be >0 for reliable hover
                                 hoveron="fills",
+                                hovertemplate=hover + "<extra></extra>",
+                                showlegend=False,
+                                name="",
+                            )
+                        )
+
+                        fig.add_trace(
+                            go.Scatter(
+                                x=[ev_start, ev_stop],
+                                y=[0, 0],
+                                mode="lines",
+                                line=dict(width=30, color="rgba(0,0,0,0.001)"),
                                 hovertemplate=hover + "<extra></extra>",
                                 showlegend=False,
                                 name="",
