@@ -236,11 +236,16 @@ async def reactor_operating_data():
                         if ev.unavailable_mw is not None:
                             label = f"-{int(round(ev.unavailable_mw))} MW"
 
+                        # Yellow for partial reductions, red for full outage (available == 0)
+                        fill = "yellow"
+                        if ev.available_mw is not None and float(ev.available_mw) == 0.0:
+                            fill = "red"
+
                         fig.add_vrect(
                             x0=ev_start,
                             x1=ev_stop,
-                            fillcolor="red",
-                            opacity=0.15,
+                            fillcolor=fill,
+                            opacity=0.18,
                             line_width=0,
                             # No always-visible text; rely on hover instead
                         )
