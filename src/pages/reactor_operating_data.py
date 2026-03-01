@@ -205,6 +205,7 @@ async def reactor_operating_data():
                             fillcolor=fill,
                             opacity=0.18,
                             line_width=0,
+                            layer="below",
                         )
 
                         hover = "UMM"
@@ -214,7 +215,24 @@ async def reactor_operating_data():
                             hover += f"<br>Available: {int(round(ev.available_mw))} MW"
                         hover += f"<br>{ev_start.strftime('%Y-%m-%d %H:%M')} → {ev_stop.strftime('%Y-%m-%d %H:%M')}"
 
-                        # Back to y=0 hover line (this was working reliably)
+                        # Hover support: prefer full-height polygon hover; keep y=0 line as fallback.
+                        # (Plotly sometimes doesn't trigger hover on fully transparent fills.)
+                        fig.add_trace(
+                            go.Scatter(
+                                x=[ev_start, ev_start, ev_stop, ev_stop, ev_start],
+                                y=[0, max_y_axis, max_y_axis, 0, 0],
+                                mode="lines",
+                                fill="toself",
+                                line=dict(width=0, color="rgba(0,0,0,0)"),
+                                fillcolor="rgba(0,0,0,0)",
+                                opacity=0.01,  # must be >0 for reliable hover
+                                hoveron="fills",
+                                hovertemplate=hover + "<extra></extra>",
+                                showlegend=False,
+                                name="",
+                            )
+                        )
+
                         fig.add_trace(
                             go.Scatter(
                                 x=[ev_start, ev_stop],
