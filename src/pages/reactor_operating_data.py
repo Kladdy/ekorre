@@ -12,6 +12,7 @@ from models.reactor import (
     REACTOR_OPERATING_DATA_MEASUREMENT,
     Reactor,
 )
+from umm import fetch_umm_events
 
 # from pages import theme
 
@@ -46,6 +47,29 @@ async def reactor_operating_data():
 
         return start, stop
 
+    # Fetch UMM once per page load (not on each date-range change)
+    start_interval_utc = get_datetime_of_extreme(
+        REACTOR_OPERATING_DATA_BUCKET,
+        REACTOR_OPERATING_DATA_MEASUREMENT,
+        "first",
+    )
+    stop_interval_utc = get_datetime_of_extreme(
+        REACTOR_OPERATING_DATA_BUCKET,
+        REACTOR_OPERATING_DATA_MEASUREMENT,
+        "last",
+    )
+
+    umm_events = []
+    umm_error: str | None = None
+    try:
+        umm_events = await asyncio.to_thread(
+            fetch_umm_events,
+            event_start_utc=start_interval_utc,
+            event_stop_utc=stop_interval_utc,
+        )
+    except Exception as e:
+        umm_error = str(e)
+
     @ui.refreshable
     def plot_cards(start_local: datetime | None = None, stop_local: datetime | None = None):
         if start_local is None:
@@ -68,6 +92,8 @@ async def reactor_operating_data():
                     ui.markdown(f"Showing data from **{start_local.date()}** to **{stop_local.date()}**")
 
         ui.separator().classes("mb-2")
+        if umm_error:
+            ui.label(f"UMM unavailable: {umm_error}").classes("text-xs text-red-400 font-mono")
 
         with ui.row():
             for reactor in Reactor.load_many_from_file("data/reactor_operating_data/reactors.yaml"):
@@ -135,6 +161,48 @@ async def reactor_operating_data():
                         template="plotly_dark",
                     ),
                 )
+
+                # Overlay Nord Pool UMM unavailability as shaded time windows
+                try:
+                    range_start = (
+                        browser_timezone.localize(start_earliest_on_local_day)
+                        if start_earliest_on_local_day.tzinfo is None
+                        else start_earliest_on_local_day
+                    )
+                    range_stop = (
+                        browser_timezone.localize(stop_latest_on_local_day)
+                        if stop_latest_on_local_day.tzinfo is None
+                        else stop_latest_on_local_day
+                    )
+
+                    for ev in umm_events:
+                        if ev.unit_label != reactor.reactor_label:
+                            continue
+
+                        ev_start = ev.start.astimezone(browser_timezone)
+                        ev_stop = ev.stop.astimezone(browser_timezone)
+
+                        # Only show if overlapping current interval
+                        if ev_stop < range_start or ev_start > range_stop:
+                            continue
+
+                        label = "UMM"
+                        if ev.unavailable_mw is not None:
+                            label = f"-{int(round(ev.unavailable_mw))} MW"
+
+                        fig.add_vrect(
+                            x0=ev_start,
+                            x1=ev_stop,
+                            fillcolor="red",
+                            opacity=0.15,
+                            line_width=0,
+                            annotation_text=label,
+                            annotation_position="top left",
+                        )
+                except Exception:
+                    # Never break plotting because of UMM parsing/overlay issues
+                    pass
+
                 fig.update_layout(margin=dict(l=0, r=0, t=0, b=0))
                 with ui.card():
                     with ui.row().classes("w-full"):
@@ -153,16 +221,8 @@ async def reactor_operating_data():
     # with theme.frame():
     # Dates picker
     with ui.row():
-        start_interval = get_datetime_of_extreme(
-            REACTOR_OPERATING_DATA_BUCKET,
-            REACTOR_OPERATING_DATA_MEASUREMENT,
-            "first",
-        )
-        stop_interval = get_datetime_of_extreme(
-            REACTOR_OPERATING_DATA_BUCKET,
-            REACTOR_OPERATING_DATA_MEASUREMENT,
-            "last",
-        )
+        start_interval = start_interval_utc
+        stop_interval = stop_interval_utc
         start_interval_date_str = utc_to_local(start_interval, browser_timezone).strftime("%Y/%m/%d")
         stop_interval_date_str = utc_to_local(stop_interval, browser_timezone).strftime("%Y/%m/%d")
 
