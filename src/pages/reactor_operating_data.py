@@ -205,6 +205,7 @@ async def reactor_operating_data():
                             fillcolor=fill,
                             opacity=0.18,
                             line_width=0,
+                            layer="below",  # don't block hover on the transparent tooltip trace
                         )
 
                         hover = "UMM"
@@ -220,12 +221,15 @@ async def reactor_operating_data():
                                 x=[ev_start, ev_start, ev_stop, ev_stop, ev_start],
                                 y=[0, max_y_axis, max_y_axis, 0, 0],
                                 fill="toself",
-                                fillcolor="rgba(0,0,0,0)",
-                                line=dict(color="rgba(0,0,0,0)", width=0),
+                                # Plotly won't always trigger hover on fully transparent fills;
+                                # use ~transparent alpha instead.
+                                fillcolor="rgba(0,0,0,0.001)",
+                                line=dict(color="rgba(0,0,0,0.001)", width=0),
                                 hoveron="fills",
                                 hovertemplate=hover + "<extra></extra>",
                                 showlegend=False,
                                 name="",
+                                mode="none",
                             )
                         )
                 except Exception:
