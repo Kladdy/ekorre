@@ -158,7 +158,12 @@ async def reactor_operating_data():
 
                 max_y_axis = max(100, max_of_non_none_y) + 10
                 fig = go.Figure(
-                    go.Scatter(x=x, y=y),
+                    go.Scatter(
+                        x=x,
+                        y=y,
+                        name="",
+                        hovertemplate="%{y:.1f}%<br>%{x}<extra></extra>",
+                    ),
                     layout=go.Layout(
                         yaxis=dict(range=[0, max_y_axis]),
                         template="plotly_dark",
