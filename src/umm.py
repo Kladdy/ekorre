@@ -18,6 +18,7 @@ class UmmEvent:
     unit_label: str  # e.g. F1, F2, F3, R3, R4
     start: datetime
     stop: datetime
+    available_mw: float | None
     unavailable_mw: float | None
     status: str | None
     title: str | None
@@ -121,6 +122,7 @@ def _extract_event_from_description_html(description_html: str) -> Iterable[UmmE
             return None
 
     i_unit = idx("unit name")
+    i_avail = idx("available capacity")
     i_unavail = idx("unavailable capacity")
     i_from = idx("from")
     i_to = idx("to")
@@ -141,6 +143,7 @@ def _extract_event_from_description_html(description_html: str) -> Iterable[UmmE
 
         start = _parse_umm_datetime(cols[i_from]) if (i_from is not None and len(cols) > i_from and cols[i_from]) else None
         stop = _parse_umm_datetime(cols[i_to]) if (i_to is not None and len(cols) > i_to and cols[i_to]) else None
+        available_mw = _parse_mw(cols[i_avail]) if (i_avail is not None and len(cols) > i_avail) else None
         unavailable_mw = _parse_mw(cols[i_unavail]) if (i_unavail is not None and len(cols) > i_unavail) else None
 
         if not start or not stop:
@@ -151,6 +154,7 @@ def _extract_event_from_description_html(description_html: str) -> Iterable[UmmE
                 unit_label=unit_label,
                 start=start,
                 stop=stop,
+                available_mw=available_mw,
                 unavailable_mw=unavailable_mw,
                 status=status,
                 title=None,
@@ -213,6 +217,7 @@ def fetch_umm_events(
                     unit_label=ev.unit_label,
                     start=ev.start,
                     stop=ev.stop,
+                    available_mw=ev.available_mw,
                     unavailable_mw=ev.unavailable_mw,
                     status=ev.status,
                     title=title,

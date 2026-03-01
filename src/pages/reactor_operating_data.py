@@ -67,8 +67,10 @@ async def reactor_operating_data():
             event_start_utc=start_interval_utc,
             event_stop_utc=stop_interval_utc,
         )
+        print(f"Fetched {len(umm_events)} UMM events")
     except Exception as e:
         umm_error = str(e)
+        print(f"Error fetching UMM: {umm_error}")
 
     @ui.refreshable
     def plot_cards(start_local: datetime | None = None, stop_local: datetime | None = None):
@@ -217,6 +219,60 @@ async def reactor_operating_data():
                             size="md",
                         ).classes("mr-2")
                     ui.plotly(fig).classes("w-96 h-40")
+
+        # Table of UMMs in selected period
+        ui.separator().classes("my-4")
+        ui.label("UMM messages in selected period").classes("text-sm font-mono text-slate-200")
+
+        try:
+            range_start = (
+                browser_timezone.localize(start_earliest_on_local_day)
+                if start_earliest_on_local_day.tzinfo is None
+                else start_earliest_on_local_day
+            )
+            range_stop = (
+                browser_timezone.localize(stop_latest_on_local_day)
+                if stop_latest_on_local_day.tzinfo is None
+                else stop_latest_on_local_day
+            )
+
+            # Map unit label -> human readable name
+            reactors = Reactor.load_many_from_file("data/reactor_operating_data/reactors.yaml")
+            name_by_label = {r.reactor_label: r.reactor_name for r in reactors}
+
+            rows = []
+            for ev in umm_events:
+                ev_start = ev.start.astimezone(browser_timezone)
+                ev_stop = ev.stop.astimezone(browser_timezone)
+                if ev_stop < range_start or ev_start > range_stop:
+                    continue
+
+                rows.append(
+                    {
+                        "block": name_by_label.get(ev.unit_label, ev.unit_label),
+                        "start": ev_start.strftime("%Y-%m-%d %H:%M"),
+                        "stop": ev_stop.strftime("%Y-%m-%d %H:%M"),
+                        "available_mw": "" if ev.available_mw is None else int(round(ev.available_mw)),
+                        "unavailable_mw": "" if ev.unavailable_mw is None else int(round(ev.unavailable_mw)),
+                    }
+                )
+
+            rows.sort(key=lambda r: (r["block"], r["start"]))
+
+            columns = [
+                {"name": "block", "label": "Block", "field": "block", "align": "left"},
+                {"name": "start", "label": "Start", "field": "start", "align": "left"},
+                {"name": "stop", "label": "Stop", "field": "stop", "align": "left"},
+                {"name": "available_mw", "label": "Available (MW)", "field": "available_mw", "align": "right"},
+                {"name": "unavailable_mw", "label": "Unavailable (MW)", "field": "unavailable_mw", "align": "right"},
+            ]
+
+            if len(rows) == 0:
+                ui.label("No UMMs in this period.").classes("text-xs font-mono text-slate-400")
+            else:
+                ui.table(columns=columns, rows=rows, row_key="start").classes("w-full")
+        except Exception as e:
+            ui.label(f"UMM table error: {e}").classes("text-xs font-mono text-red-400")
 
     # with theme.frame():
     # Dates picker
