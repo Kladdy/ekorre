@@ -265,7 +265,7 @@ async def reactor_operating_data():
 
         # Table of UMMs in selected period
         ui.separator().classes("my-4")
-        ui.label("UMM messages in selected period").classes("text-sm font-mono text-slate-200")
+        ui.label("UMM messages in selected period (excluding cancelled/dismissed)").classes("text-sm font-mono text-slate-200")
 
         try:
             range_start = (
