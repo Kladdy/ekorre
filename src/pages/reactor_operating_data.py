@@ -1,5 +1,4 @@
 import asyncio
-import json
 from datetime import datetime, timedelta, timezone
 
 import plotly.graph_objects as go
@@ -302,12 +301,17 @@ async def reactor_operating_data():
                 table.props("flat")
 
                 # Make each row clickable to open the UMM message in a new tab
-                async def _on_row_click(e: events.GenericEventArguments):
+                def _on_row_click(e: events.GenericEventArguments):
+                    # Helpful debug in server logs (can be removed later)
+                    print(f"rowClick args: {e.args}")
                     try:
                         link = (e.args or {}).get("row", {}).get("link")
                         if link:
-                            # Use JSON encoding to safely quote the URL
-                            await ui.run_javascript(f"window.open({json.dumps(link)}, '_blank')")
+                            # Prefer NiceGUI navigation helpers over raw JS
+                            try:
+                                ui.open(link, new_tab=True)  # type: ignore[attr-defined]
+                            except Exception:
+                                ui.navigate.to(link, new_tab=True)  # type: ignore[attr-defined]
                     except Exception as ex:
                         print(f"Row click failed: {ex}")
 
