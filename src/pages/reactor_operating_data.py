@@ -301,13 +301,29 @@ async def reactor_operating_data():
                 table.props("flat")
 
                 # Make each row clickable to open the UMM message in a new tab
+                def _extract_row_from_table_event_args(args):
+                    # Quasar emits different shapes depending on version/options.
+                    # We try a few common ones:
+                    # - {'row': {...}, 'pageIndex': 0}
+                    # - [{...row...}, index]
+                    if args is None:
+                        return None
+                    if isinstance(args, dict):
+                        if isinstance(args.get("row"), dict):
+                            return args.get("row")
+                        return args
+                    if isinstance(args, list) and len(args) > 0:
+                        if isinstance(args[0], dict):
+                            return args[0]
+                    return None
+
                 def _on_row_click(e: events.GenericEventArguments):
                     # Helpful debug in server logs (can be removed later)
                     print(f"rowClick args: {e.args}")
                     try:
-                        link = (e.args or {}).get("row", {}).get("link")
+                        row = _extract_row_from_table_event_args(e.args)
+                        link = (row or {}).get("link")
                         if link:
-                            # Prefer NiceGUI navigation helpers over raw JS
                             try:
                                 ui.open(link, new_tab=True)  # type: ignore[attr-defined]
                             except Exception:
