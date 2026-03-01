@@ -158,7 +158,12 @@ async def reactor_operating_data():
 
                 max_y_axis = max(100, max_of_non_none_y) + 10
                 fig = go.Figure(
-                    go.Scatter(x=x, y=y),
+                    go.Scatter(
+                        x=x,
+                        y=y,
+                        name="",
+                        hovertemplate="%{y:.1f} %<br>%{x}<extra></extra>",
+                    ),
                     layout=go.Layout(
                         yaxis=dict(range=[0, max_y_axis]),
                         template="plotly_dark",
@@ -195,7 +200,7 @@ async def reactor_operating_data():
                             label = f"-{int(round(ev.unavailable_mw))} MW"
 
                         # Yellow for partial reductions, red for full outage (available == 0)
-                        fill = "yellow"
+                        fill = "orange"
                         if ev.available_mw is not None and float(ev.available_mw) == 0.0:
                             fill = "red"
 
