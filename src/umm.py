@@ -8,6 +8,7 @@ import pytz
 import requests
 from bs4 import BeautifulSoup
 from xml.etree import ElementTree
+from html import unescape
 
 
 STOCKHOLM_TZ = pytz.timezone("Europe/Stockholm")
@@ -213,17 +214,28 @@ def fetch_umm_events(
     resp = requests.get(url, timeout=20)
     resp.raise_for_status()
 
-    # RSS XML
     root = ElementTree.fromstring(resp.content)
 
     events: list[UmmEvent] = []
-    for item in root.findall(".//item"):
-        title = (item.findtext("title") or "").strip() or None
-        link = (item.findtext("link") or "").strip() or None
-        description = item.findtext("description") or ""
 
-        for ev in _extract_event_from_description_html(description):
-            # Carry title/link onto each extracted unit row
+    # Nord Pool UMM endpoint returns an Atom feed (<feed><entry>...), not RSS (<rss><item>...).
+    for entry in root.findall(".//{*}entry"):
+        title = (entry.findtext("{*}title") or "").strip() or None
+
+        link = None
+        # <link rel="alternate" href="..." />
+        for link_el in entry.findall("{*}link"):
+            rel = (link_el.attrib.get("rel") or "").strip().lower()
+            href = (link_el.attrib.get("href") or "").strip()
+            if href and (not rel or rel == "alternate"):
+                link = href
+                break
+
+        content = entry.findtext("{*}content") or ""
+        # Content is HTML-escaped (e.g. &lt;table&gt;...), so unescape before parsing.
+        content_html = unescape(content)
+
+        for ev in _extract_event_from_description_html(content_html):
             events.append(
                 UmmEvent(
                     unit_label=ev.unit_label,
