@@ -12,6 +12,7 @@ from models.reactor import (
     REACTOR_OPERATING_DATA_MEASUREMENT,
     Reactor,
 )
+from umm import fetch_umm_events
 
 # from pages import theme
 
@@ -46,6 +47,32 @@ async def reactor_operating_data():
 
         return start, stop
 
+    # Fetch UMM once per page load (not on each date-range change)
+    start_interval_utc = get_datetime_of_extreme(
+        REACTOR_OPERATING_DATA_BUCKET,
+        REACTOR_OPERATING_DATA_MEASUREMENT,
+        "first",
+    )
+    stop_interval_utc = get_datetime_of_extreme(
+        REACTOR_OPERATING_DATA_BUCKET,
+        REACTOR_OPERATING_DATA_MEASUREMENT,
+        "last",
+    )
+
+    umm_events = []
+    umm_error: str | None = None
+    try:
+        umm_events, umm_url = await asyncio.to_thread(
+            fetch_umm_events,
+            event_stop_utc=datetime.now(timezone.utc),
+            limit=10000,
+        )
+        print(f"UMM RSS URL: {umm_url}")
+        print(f"Fetched {len(umm_events)} UMM events")
+    except Exception as e:
+        umm_error = str(e)
+        print(f"Error fetching UMM: {umm_error}")
+
     @ui.refreshable
     def plot_cards(start_local: datetime | None = None, stop_local: datetime | None = None):
         if start_local is None:
@@ -68,6 +95,8 @@ async def reactor_operating_data():
                     ui.markdown(f"Showing data from **{start_local.date()}** to **{stop_local.date()}**")
 
         ui.separator().classes("mb-2")
+        if umm_error:
+            ui.label(f"UMM unavailable: {umm_error}").classes("text-xs text-red-400 font-mono")
 
         with ui.row():
             for reactor in Reactor.load_many_from_file("data/reactor_operating_data/reactors.yaml"):
@@ -135,7 +164,91 @@ async def reactor_operating_data():
                         template="plotly_dark",
                     ),
                 )
-                fig.update_layout(margin=dict(l=0, r=0, t=0, b=0))
+
+
+                # Overlay Nord Pool UMM unavailability as shaded time windows
+                try:
+                    range_start = (
+                        browser_timezone.localize(start_earliest_on_local_day)
+                        if start_earliest_on_local_day.tzinfo is None
+                        else start_earliest_on_local_day
+                    )
+                    range_stop = (
+                        browser_timezone.localize(stop_latest_on_local_day)
+                        if stop_latest_on_local_day.tzinfo is None
+                        else stop_latest_on_local_day
+                    )
+
+                    for ev in umm_events:
+                        if ev.unit_label != reactor.reactor_label:
+                            continue
+
+                        ev_start = ev.start.astimezone(browser_timezone)
+                        ev_stop = ev.stop.astimezone(browser_timezone)
+
+                        # Only show if overlapping current interval
+                        if ev_stop < range_start or ev_start > range_stop:
+                            continue
+
+                        label = "UMM"
+                        if ev.unavailable_mw is not None:
+                            label = f"-{int(round(ev.unavailable_mw))} MW"
+
+                        # Yellow for partial reductions, red for full outage (available == 0)
+                        fill = "yellow"
+                        if ev.available_mw is not None and float(ev.available_mw) == 0.0:
+                            fill = "red"
+
+                        fig.add_vrect(
+                            x0=ev_start,
+                            x1=ev_stop,
+                            fillcolor=fill,
+                            opacity=0.18,
+                            line_width=0,
+                            layer="below",
+                        )
+
+                        hover = "UMM"
+                        if ev.unavailable_mw is not None:
+                            hover = f"Unavailable: {int(round(ev.unavailable_mw))} MW"
+                        if ev.available_mw is not None:
+                            hover += f"<br>Available: {int(round(ev.available_mw))} MW"
+                        hover += f"<br>{ev_start.strftime('%Y-%m-%d %H:%M')} → {ev_stop.strftime('%Y-%m-%d %H:%M')}"
+
+                        # Hover support: prefer full-height polygon hover; keep y=0 line as fallback.
+                        # (Plotly sometimes doesn't trigger hover on fully transparent fills.)
+                        fig.add_trace(
+                            go.Scatter(
+                                x=[ev_start, ev_start, ev_stop, ev_stop, ev_start],
+                                y=[0, max_y_axis, max_y_axis, 0, 0],
+                                mode="lines",
+                                fill="toself",
+                                line=dict(width=0, color="rgba(0,0,0,0)"),
+                                fillcolor="rgba(0,0,0,0)",
+                                opacity=0.01,  # must be >0 for reliable hover
+                                hoveron="fills",
+                                hovertemplate=hover + "<extra></extra>",
+                                showlegend=False,
+                                name="",
+                            )
+                        )
+
+                        fig.add_trace(
+                            go.Scatter(
+                                x=[ev_start, ev_stop],
+                                y=[0, 0],
+                                mode="lines",
+                                line=dict(width=30, color="rgba(0,0,0,0.001)"),
+                                hovertemplate=hover + "<extra></extra>",
+                                showlegend=False,
+                                name="",
+                            )
+                        )
+                except Exception:
+                    # Never break plotting because of UMM parsing/overlay issues
+                    pass
+
+                fig.update_layout(margin=dict(l=0, r=0, t=0, b=0), showlegend=False)
                 with ui.card():
                     with ui.row().classes("w-full"):
                         with ui.row().classes("items-baseline"):
@@ -150,19 +263,90 @@ async def reactor_operating_data():
                         ).classes("mr-2")
                     ui.plotly(fig).classes("w-96 h-40")
 
+        # Table of UMMs in selected period
+        ui.separator().classes("my-4")
+        ui.label("UMM messages in selected period (excluding cancelled/dismissed)").classes("text-sm font-mono text-slate-200")
+
+        try:
+            range_start = (
+                browser_timezone.localize(start_earliest_on_local_day)
+                if start_earliest_on_local_day.tzinfo is None
+                else start_earliest_on_local_day
+            )
+            range_stop = (
+                browser_timezone.localize(stop_latest_on_local_day)
+                if stop_latest_on_local_day.tzinfo is None
+                else stop_latest_on_local_day
+            )
+
+            # Map unit label -> human readable name
+            reactors = Reactor.load_many_from_file("data/reactor_operating_data/reactors.yaml")
+            name_by_label = {r.reactor_label: r.reactor_name for r in reactors}
+
+            rows = []
+            for ev in umm_events:
+                ev_start = ev.start.astimezone(browser_timezone)
+                ev_stop = ev.stop.astimezone(browser_timezone)
+                if ev_stop < range_start or ev_start > range_stop:
+                    continue
+
+                rows.append(
+                    {
+                        "block": name_by_label.get(ev.unit_label, ev.unit_label),
+                        "start": ev_start.strftime("%Y-%m-%d %H:%M"),
+                        "stop": ev_stop.strftime("%Y-%m-%d %H:%M"),
+                        "available_mw": "" if ev.available_mw is None else int(round(ev.available_mw)),
+                        "unavailable_mw": "" if ev.unavailable_mw is None else int(round(ev.unavailable_mw)),
+                        "link": ev.link or "",
+                        "_id": f"{ev.unit_label}-{ev.start.isoformat()}-{ev.stop.isoformat()}" ,
+                    }
+                )
+
+            rows.sort(key=lambda r: (r["block"], r["start"]))
+
+            columns = [
+                {"name": "block", "label": "Block", "field": "block", "align": "left"},
+                {"name": "start", "label": "Start", "field": "start", "align": "left"},
+                {"name": "stop", "label": "Stop", "field": "stop", "align": "left"},
+                {"name": "available_mw", "label": "Available (MW)", "field": "available_mw", "align": "right"},
+                {"name": "unavailable_mw", "label": "Unavailable (MW)", "field": "unavailable_mw", "align": "right"},
+                {"name": "umm", "label": "", "field": "umm", "align": "left"},
+            ]
+
+            if len(rows) == 0:
+                ui.label("No UMMs in this period.").classes("text-xs font-mono text-slate-400")
+            else:
+                table = ui.table(columns=columns, rows=rows, row_key="_id").classes("w-fit")
+                table.props("flat")
+
+                # Add a subtle per-row button which opens the UMM link in a new tab.
+                # Using a plain anchor/q-btn avoids server-side click handling brittleness.
+                table.add_slot(
+                    "body-cell-umm",
+                    r'''
+<q-td :props="props">
+  <q-btn
+    dense
+    flat
+    size="sm"
+    color="grey-6"
+    icon="open_in_new"
+    label="UMM"
+    :href="props.row.link"
+    target="_blank"
+    type="a"
+  />
+</q-td>
+''',
+                )
+        except Exception as e:
+            ui.label(f"UMM table error: {e}").classes("text-xs font-mono text-red-400")
+
     # with theme.frame():
     # Dates picker
     with ui.row():
-        start_interval = get_datetime_of_extreme(
-            REACTOR_OPERATING_DATA_BUCKET,
-            REACTOR_OPERATING_DATA_MEASUREMENT,
-            "first",
-        )
-        stop_interval = get_datetime_of_extreme(
-            REACTOR_OPERATING_DATA_BUCKET,
-            REACTOR_OPERATING_DATA_MEASUREMENT,
-            "last",
-        )
+        start_interval = start_interval_utc
+        stop_interval = stop_interval_utc
         start_interval_date_str = utc_to_local(start_interval, browser_timezone).strftime("%Y/%m/%d")
         stop_interval_date_str = utc_to_local(stop_interval, browser_timezone).strftime("%Y/%m/%d")
 
