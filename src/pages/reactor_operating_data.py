@@ -102,6 +102,18 @@ async def reactor_operating_data():
             for reactor in Reactor.load_many_from_file("data/reactor_operating_data/reactors.yaml"):
 
                 # Get data from InfluxDB
+                # Downsample for long intervals to avoid huge Plotly payloads (browser can crash/hang)
+                span = stop_latest_on_local_day - start_earliest_on_local_day
+                aggregate_every = None
+                if span > timedelta(days=365):
+                    aggregate_every = "6h"
+                elif span > timedelta(days=180):
+                    aggregate_every = "3h"
+                elif span > timedelta(days=90):
+                    aggregate_every = "1h"
+                elif span > timedelta(days=30):
+                    aggregate_every = "30m"
+
                 records = read_from_influx(
                     REACTOR_OPERATING_DATA_BUCKET,
                     REACTOR_OPERATING_DATA_MEASUREMENT,
@@ -109,6 +121,8 @@ async def reactor_operating_data():
                     tags={"block": reactor.reactor_label},
                     start=start_earliest_on_local_day,
                     stop=stop_latest_on_local_day,
+                    aggregate_every=aggregate_every,
+                    aggregate_fn="last",
                 )
 
                 if len(records) == 0:
