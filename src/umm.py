@@ -166,7 +166,7 @@ def _extract_event_from_description_html(description_html: str) -> Iterable[UmmE
     return events
 
 
-def build_umm_rss_url(*, event_stop_utc: datetime, limit: int = 500) -> str:
+def build_umm_rss_url(*, event_stop_utc: datetime, limit: int = 10000) -> str:
     """Build Nord Pool UMM RSS URL.
 
     NOTE: Sigge requested eventStartDate to be hardcoded to the earliest date the
@@ -202,7 +202,7 @@ def build_umm_rss_url(*, event_stop_utc: datetime, limit: int = 500) -> str:
 def fetch_umm_events(
     *,
     event_stop_utc: datetime,
-    limit: int = 500,
+    limit: int = 10000,
 ) -> tuple[list[UmmEvent], str]:
     """Fetch Nord Pool UMM RSS feed and extract unavailability events.
 

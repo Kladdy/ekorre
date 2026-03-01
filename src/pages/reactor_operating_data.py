@@ -65,6 +65,7 @@ async def reactor_operating_data():
         umm_events, umm_url = await asyncio.to_thread(
             fetch_umm_events,
             event_stop_utc=datetime.now(timezone.utc),
+            limit=10000,
         )
         print(f"UMM RSS URL: {umm_url}")
         print(f"Fetched {len(umm_events)} UMM events")
@@ -192,6 +193,17 @@ async def reactor_operating_data():
                         if ev.unavailable_mw is not None:
                             label = f"-{int(round(ev.unavailable_mw))} MW"
 
+                        # Try to avoid label overlap by staggering vertical shift a bit
+                        idx_in_reactor = 0
+                        # count prior same-reactor overlays that overlap (rough heuristic)
+                        for prev in umm_events:
+                            if prev is ev or prev.unit_label != reactor.reactor_label:
+                                continue
+                            ps = prev.start.astimezone(browser_timezone)
+                            pe = prev.stop.astimezone(browser_timezone)
+                            if not (pe < ev_start or ps > ev_stop):
+                                idx_in_reactor += 1
+
                         fig.add_vrect(
                             x0=ev_start,
                             x1=ev_stop,
@@ -199,7 +211,14 @@ async def reactor_operating_data():
                             opacity=0.15,
                             line_width=0,
                             annotation_text=label,
-                            annotation_position="top left",
+                            annotation_position="bottom left",
+                            annotation=dict(
+                                yref="paper",
+                                y=0.02,
+                                yanchor="bottom",
+                                yshift=idx_in_reactor * 10,
+                                font=dict(size=10, color="white"),
+                            ),
                         )
                 except Exception:
                     # Never break plotting because of UMM parsing/overlay issues
@@ -255,6 +274,7 @@ async def reactor_operating_data():
                         "available_mw": "" if ev.available_mw is None else int(round(ev.available_mw)),
                         "unavailable_mw": "" if ev.unavailable_mw is None else int(round(ev.unavailable_mw)),
                         "link": ev.link or "",
+                        "_id": f"{ev.unit_label}-{ev.start.isoformat()}-{ev.stop.isoformat()}" ,
                     }
                 )
 
@@ -266,13 +286,24 @@ async def reactor_operating_data():
                 {"name": "stop", "label": "Stop", "field": "stop", "align": "left"},
                 {"name": "available_mw", "label": "Available (MW)", "field": "available_mw", "align": "right"},
                 {"name": "unavailable_mw", "label": "Unavailable (MW)", "field": "unavailable_mw", "align": "right"},
-                {"name": "link", "label": "Link", "field": "link", "align": "left"},
             ]
 
             if len(rows) == 0:
                 ui.label("No UMMs in this period.").classes("text-xs font-mono text-slate-400")
             else:
-                ui.table(columns=columns, rows=rows, row_key="start").classes("w-full")
+                table = ui.table(columns=columns, rows=rows, row_key="_id").classes("w-full")
+                table.props("flat")
+
+                # Make each row clickable to open the UMM message in a new tab
+                def _on_row_click(e: events.GenericEventArguments):
+                    try:
+                        link = (e.args or {}).get("row", {}).get("link")
+                        if link:
+                            ui.run_javascript(f"window.open('{link}', '_blank')")
+                    except Exception:
+                        pass
+
+                table.on("rowClick", _on_row_click)
         except Exception as e:
             ui.label(f"UMM table error: {e}").classes("text-xs font-mono text-red-400")
 
