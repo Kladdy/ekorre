@@ -1,4 +1,5 @@
 import asyncio
+import json
 from datetime import datetime, timedelta, timezone
 
 import plotly.graph_objects as go
@@ -205,7 +206,6 @@ async def reactor_operating_data():
                             fillcolor=fill,
                             opacity=0.18,
                             line_width=0,
-                            layer="below",  # don't block hover on the transparent tooltip trace
                         )
 
                         hover = "UMM"
@@ -215,21 +215,16 @@ async def reactor_operating_data():
                             hover += f"<br>Available: {int(round(ev.available_mw))} MW"
                         hover += f"<br>{ev_start.strftime('%Y-%m-%d %H:%M')} → {ev_stop.strftime('%Y-%m-%d %H:%M')}"
 
-                        # Transparent polygon spanning whole y-range for easy hover anywhere in the window
+                        # Back to y=0 hover line (this was working reliably)
                         fig.add_trace(
                             go.Scatter(
-                                x=[ev_start, ev_start, ev_stop, ev_stop, ev_start],
-                                y=[0, max_y_axis, max_y_axis, 0, 0],
-                                fill="toself",
-                                # Plotly won't always trigger hover on fully transparent fills;
-                                # use ~transparent alpha instead.
-                                fillcolor="rgba(0,0,0,0.001)",
-                                line=dict(color="rgba(0,0,0,0.001)", width=0),
-                                hoveron="fills",
+                                x=[ev_start, ev_stop],
+                                y=[0, 0],
+                                mode="lines",
+                                line=dict(width=30, color="rgba(0,0,0,0.001)"),
                                 hovertemplate=hover + "<extra></extra>",
                                 showlegend=False,
                                 name="",
-                                mode="none",
                             )
                         )
                 except Exception:
@@ -307,14 +302,16 @@ async def reactor_operating_data():
                 table.props("flat")
 
                 # Make each row clickable to open the UMM message in a new tab
-                def _on_row_click(e: events.GenericEventArguments):
+                async def _on_row_click(e: events.GenericEventArguments):
                     try:
                         link = (e.args or {}).get("row", {}).get("link")
                         if link:
-                            ui.run_javascript(f"window.open('{link}', '_blank')")
-                    except Exception:
-                        pass
+                            # Use JSON encoding to safely quote the URL
+                            await ui.run_javascript(f"window.open({json.dumps(link)}, '_blank')")
+                    except Exception as ex:
+                        print(f"Row click failed: {ex}")
 
+                # NiceGUI/Quasar table uses 'rowClick'
                 table.on("rowClick", _on_row_click)
         except Exception as e:
             ui.label(f"UMM table error: {e}").classes("text-xs font-mono text-red-400")
