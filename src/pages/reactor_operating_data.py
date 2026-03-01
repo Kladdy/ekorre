@@ -234,35 +234,25 @@ async def reactor_operating_data():
                             hover += f"<br>Available: {int(round(ev.available_mw))} MW"
                         hover += f"<br>{ev_start.strftime('%Y-%m-%d %H:%M')} → {ev_stop.strftime('%Y-%m-%d %H:%M')}"
 
-                        # Hover support: prefer full-height polygon hover; keep y=0 line as fallback.
-                        # (Plotly sometimes doesn't trigger hover on fully transparent fills.)
-                        fig.add_trace(
-                            go.Scatter(
-                                x=[ev_start, ev_start, ev_stop, ev_stop, ev_start],
-                                y=[0, max_y_axis, max_y_axis, 0, 0],
-                                mode="lines",
-                                fill="toself",
-                                line=dict(width=0, color="rgba(0,0,0,0)"),
-                                fillcolor="rgba(0,0,0,0)",
-                                opacity=0.01,  # must be >0 for reliable hover
-                                hoveron="fills",
-                                hovertemplate=hover + "<extra></extra>",
-                                showlegend=False,
-                                name="",
+                        # Hover support for the UMM window.
+                        #
+                        # Do NOT use a full-height transparent fill polygon here: it captures the hover
+                        # and prevents hovering the actual reactor operating data inside the interval.
+                        #
+                        # Instead, expose the UMM hover on thin (but easy-to-hit) invisible lines at the
+                        # bottom and top of the plot.
+                        for y_hover in (0, max_y_axis):
+                            fig.add_trace(
+                                go.Scatter(
+                                    x=[ev_start, ev_stop],
+                                    y=[y_hover, y_hover],
+                                    mode="lines",
+                                    line=dict(width=30, color="rgba(0,0,0,0.001)"),
+                                    hovertemplate=hover + "<extra></extra>",
+                                    showlegend=False,
+                                    name="",
+                                )
                             )
-                        )
-
-                        fig.add_trace(
-                            go.Scatter(
-                                x=[ev_start, ev_stop],
-                                y=[0, 0],
-                                mode="lines",
-                                line=dict(width=30, color="rgba(0,0,0,0.001)"),
-                                hovertemplate=hover + "<extra></extra>",
-                                showlegend=False,
-                                name="",
-                            )
-                        )
                 except Exception:
                     # Never break plotting because of UMM parsing/overlay issues
                     pass
