@@ -165,6 +165,49 @@ async def reactor_operating_data():
                     ),
                 )
 
+                # Add invisible scatter segments for UMM hover tooltips
+                try:
+                    range_start = (
+                        browser_timezone.localize(start_earliest_on_local_day)
+                        if start_earliest_on_local_day.tzinfo is None
+                        else start_earliest_on_local_day
+                    )
+                    range_stop = (
+                        browser_timezone.localize(stop_latest_on_local_day)
+                        if stop_latest_on_local_day.tzinfo is None
+                        else stop_latest_on_local_day
+                    )
+
+                    for ev in umm_events:
+                        if ev.unit_label != reactor.reactor_label:
+                            continue
+
+                        ev_start = ev.start.astimezone(browser_timezone)
+                        ev_stop = ev.stop.astimezone(browser_timezone)
+                        if ev_stop < range_start or ev_start > range_stop:
+                            continue
+
+                        hover = "UMM"
+                        if ev.unavailable_mw is not None:
+                            hover = f"Unavailable: {int(round(ev.unavailable_mw))} MW"
+                        if ev.available_mw is not None:
+                            hover += f"<br>Available: {int(round(ev.available_mw))} MW"
+                        hover += f"<br>{ev_start.strftime('%Y-%m-%d %H:%M')} → {ev_stop.strftime('%Y-%m-%d %H:%M')}"
+
+                        # A transparent trace so that hovering within the window shows tooltip.
+                        fig.add_trace(
+                            go.Scatter(
+                                x=[ev_start, ev_stop],
+                                y=[0, 0],
+                                mode="lines",
+                                line=dict(width=30, color="rgba(255,0,0,0)"),
+                                hovertemplate=hover + "<extra></extra>",
+                                showlegend=False,
+                            )
+                        )
+                except Exception:
+                    pass
+
                 # Overlay Nord Pool UMM unavailability as shaded time windows
                 try:
                     range_start = (
@@ -193,32 +236,13 @@ async def reactor_operating_data():
                         if ev.unavailable_mw is not None:
                             label = f"-{int(round(ev.unavailable_mw))} MW"
 
-                        # Try to avoid label overlap by staggering vertical shift a bit
-                        idx_in_reactor = 0
-                        # count prior same-reactor overlays that overlap (rough heuristic)
-                        for prev in umm_events:
-                            if prev is ev or prev.unit_label != reactor.reactor_label:
-                                continue
-                            ps = prev.start.astimezone(browser_timezone)
-                            pe = prev.stop.astimezone(browser_timezone)
-                            if not (pe < ev_start or ps > ev_stop):
-                                idx_in_reactor += 1
-
                         fig.add_vrect(
                             x0=ev_start,
                             x1=ev_stop,
                             fillcolor="red",
                             opacity=0.15,
                             line_width=0,
-                            annotation_text=label,
-                            annotation_position="bottom left",
-                            annotation=dict(
-                                yref="paper",
-                                y=0.02,
-                                yanchor="bottom",
-                                yshift=idx_in_reactor * 10,
-                                font=dict(size=10, color="white"),
-                            ),
+                            # No always-visible text; rely on hover instead
                         )
                 except Exception:
                     # Never break plotting because of UMM parsing/overlay issues
@@ -291,7 +315,7 @@ async def reactor_operating_data():
             if len(rows) == 0:
                 ui.label("No UMMs in this period.").classes("text-xs font-mono text-slate-400")
             else:
-                table = ui.table(columns=columns, rows=rows, row_key="_id").classes("w-full")
+                table = ui.table(columns=columns, rows=rows, row_key="_id").classes("w-fit")
                 table.props("flat")
 
                 # Make each row clickable to open the UMM message in a new tab
