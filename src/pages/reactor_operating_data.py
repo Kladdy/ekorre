@@ -179,7 +179,6 @@ async def reactor_operating_data():
                         else stop_latest_on_local_day
                     )
 
-                    overlay_idx = 0
                     for ev in umm_events:
                         if ev.unit_label != reactor.reactor_label:
                             continue
@@ -206,22 +205,34 @@ async def reactor_operating_data():
                             fillcolor=fill,
                             opacity=0.18,
                             line_width=0,
-                            annotation_text=label,
-                            annotation_position="bottom left",
-                            annotation=dict(
-                                yref="paper",
-                                y=0.02,
-                                yanchor="bottom",
-                                yshift=overlay_idx * 10,
-                                font=dict(size=10, color="white"),
-                            ),
                         )
-                        overlay_idx += 1
+
+                        hover = "UMM"
+                        if ev.unavailable_mw is not None:
+                            hover = f"Unavailable: {int(round(ev.unavailable_mw))} MW"
+                        if ev.available_mw is not None:
+                            hover += f"<br>Available: {int(round(ev.available_mw))} MW"
+                        hover += f"<br>{ev_start.strftime('%Y-%m-%d %H:%M')} → {ev_stop.strftime('%Y-%m-%d %H:%M')}"
+
+                        # Transparent polygon spanning whole y-range for easy hover anywhere in the window
+                        fig.add_trace(
+                            go.Scatter(
+                                x=[ev_start, ev_start, ev_stop, ev_stop, ev_start],
+                                y=[0, max_y_axis, max_y_axis, 0, 0],
+                                fill="toself",
+                                fillcolor="rgba(0,0,0,0)",
+                                line=dict(color="rgba(0,0,0,0)", width=0),
+                                hoveron="fills",
+                                hovertemplate=hover + "<extra></extra>",
+                                showlegend=False,
+                                name="",
+                            )
+                        )
                 except Exception:
                     # Never break plotting because of UMM parsing/overlay issues
                     pass
 
-                fig.update_layout(margin=dict(l=0, r=0, t=0, b=0))
+                fig.update_layout(margin=dict(l=0, r=0, t=0, b=0), showlegend=False)
                 with ui.card():
                     with ui.row().classes("w-full"):
                         with ui.row().classes("items-baseline"):
