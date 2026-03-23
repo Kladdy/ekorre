@@ -255,13 +255,12 @@ async def reactor_operating_data():
                             )
                 except Exception:
                     # Never break plotting because of UMM parsing/overlay issues
-                # Prevent UMM vrects from changing x-axis limits — preserve data-driven x limits
-                try:
-                    xmin = min(x)
-                    xmax = max(x)
-                    fig.update_xaxes(range=[xmin, xmax])
-                except Exception:
-                    pass
+                    try:
+                        xmin = min(x)
+                        xmax = max(x)
+                        fig.update_xaxes(range=[xmin, xmax])
+                    except Exception:
+                        pass
 
                 fig.update_layout(margin=dict(l=0, r=0, t=0, b=0), showlegend=False)
                 with ui.card():
