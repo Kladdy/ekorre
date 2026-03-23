@@ -184,7 +184,6 @@ async def reactor_operating_data():
                     ),
                 )
 
-
                 # Overlay Nord Pool UMM unavailability as shaded time windows
                 try:
                     range_start = (
@@ -253,14 +252,13 @@ async def reactor_operating_data():
                                     name="",
                                 )
                             )
-                except Exception:
-                    # Never break plotting because of UMM parsing/overlay issues
-                    try:
+
                         xmin = min(x)
                         xmax = max(x)
                         fig.update_xaxes(range=[xmin, xmax])
-                    except Exception:
-                        pass
+                except Exception:
+                    # Never break plotting because of UMM parsing/overlay issues
+                    pass
 
                 fig.update_layout(margin=dict(l=0, r=0, t=0, b=0), showlegend=False)
                 with ui.card():
@@ -279,7 +277,9 @@ async def reactor_operating_data():
 
         # Table of UMMs in selected period
         ui.separator().classes("my-4")
-        ui.label("UMM messages in selected period (excluding cancelled/dismissed)").classes("text-sm font-mono text-slate-200")
+        ui.label("UMM messages in selected period (excluding cancelled/dismissed)").classes(
+            "text-sm font-mono text-slate-200"
+        )
 
         try:
             range_start = (
@@ -312,7 +312,7 @@ async def reactor_operating_data():
                         "available_mw": "" if ev.available_mw is None else int(round(ev.available_mw)),
                         "unavailable_mw": "" if ev.unavailable_mw is None else int(round(ev.unavailable_mw)),
                         "link": ev.link or "",
-                        "_id": f"{ev.unit_label}-{ev.start.isoformat()}-{ev.stop.isoformat()}" ,
+                        "_id": f"{ev.unit_label}-{ev.start.isoformat()}-{ev.stop.isoformat()}",
                     }
                 )
 
@@ -337,7 +337,7 @@ async def reactor_operating_data():
                 # Using a plain anchor/q-btn avoids server-side click handling brittleness.
                 table.add_slot(
                     "body-cell-umm",
-                    r'''
+                    r"""
 <q-td :props="props">
   <q-btn
     dense
@@ -351,7 +351,7 @@ async def reactor_operating_data():
     type="a"
   />
 </q-td>
-''',
+""",
                 )
         except Exception as e:
             ui.label(f"UMM table error: {e}").classes("text-xs font-mono text-red-400")
