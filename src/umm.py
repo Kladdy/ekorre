@@ -16,6 +16,7 @@ STOCKHOLM_TZ = pytz.timezone("Europe/Stockholm")
 @dataclass(frozen=True)
 class UmmEvent:
     unit_label: str  # e.g. F1, F2, F3, R3, R4
+    unit_suffix: str | None  # e.g. "G31" for Ringhals 3 generator 1, or None for the whole block
     start: datetime
     stop: datetime
     available_mw: float | None
@@ -23,7 +24,6 @@ class UmmEvent:
     status: str | None
     title: str | None
     link: str | None
-    unit_suffix: str | None = None  # e.g. "G31" for Ringhals 3 generator 1, or None for the whole block
 
 
 _UNIT_NAME_PATTERNS: list[tuple[str, str]] = [
@@ -166,6 +166,7 @@ def _extract_event_from_description_html(description_html: str) -> Iterable[UmmE
         events.append(
             UmmEvent(
                 unit_label=unit_label,
+                unit_suffix=unit_suffix,
                 start=start,
                 stop=stop,
                 available_mw=available_mw,
@@ -173,7 +174,6 @@ def _extract_event_from_description_html(description_html: str) -> Iterable[UmmE
                 status=status,
                 title=None,
                 link=None,
-                unit_suffix=unit_suffix,
             )
         )
 
@@ -254,6 +254,7 @@ def fetch_umm_events(
             events.append(
                 UmmEvent(
                     unit_label=ev.unit_label,
+                    unit_suffix=ev.unit_suffix,
                     start=ev.start,
                     stop=ev.stop,
                     available_mw=ev.available_mw,
