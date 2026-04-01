@@ -2,14 +2,13 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime
+from html import unescape
 from typing import Iterable
+from xml.etree import ElementTree
 
 import pytz
 import requests
 from bs4 import BeautifulSoup
-from xml.etree import ElementTree
-from html import unescape
-
 
 STOCKHOLM_TZ = pytz.timezone("Europe/Stockholm")
 
@@ -138,11 +137,21 @@ def _extract_event_from_description_html(description_html: str) -> Iterable[UmmE
             continue
 
         unit_name = cols[i_unit]
+
+        # Special case for generators of Ringhals 3 & 4
+        if unit_name in ["G31", "G32"]:
+            unit_name = "Ringhals Block 3"
+        elif unit_name in ["G41", "G42"]:
+            unit_name = "Ringhals Block 4"
+
         unit_label = _unit_label_from_unit_name(unit_name)
+
         if not unit_label:
             continue
 
-        start = _parse_umm_datetime(cols[i_from]) if (i_from is not None and len(cols) > i_from and cols[i_from]) else None
+        start = (
+            _parse_umm_datetime(cols[i_from]) if (i_from is not None and len(cols) > i_from and cols[i_from]) else None
+        )
         stop = _parse_umm_datetime(cols[i_to]) if (i_to is not None and len(cols) > i_to and cols[i_to]) else None
         available_mw = _parse_mw(cols[i_avail]) if (i_avail is not None and len(cols) > i_avail) else None
         unavailable_mw = _parse_mw(cols[i_unavail]) if (i_unavail is not None and len(cols) > i_unavail) else None
@@ -191,7 +200,8 @@ def build_umm_rss_url(*, event_stop_utc: datetime, limit: int = 10000) -> str:
         "?areas=10Y1001A1001A46L"
         "&companies=N02101"
         "&companies=N01256"
-        "&fuelTypes=14"
+        "&fuelTypes=nuclear"
+        "&status=active"
         f"&publicationStartDate={publication_start_encoded}"
         f"&eventStartDate={event_start_encoded}"
         f"&eventStopDate={event_stop_encoded}"
