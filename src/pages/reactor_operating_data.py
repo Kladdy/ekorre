@@ -212,10 +212,12 @@ async def reactor_operating_data():
                         if ev.unavailable_mw is not None:
                             label = f"-{int(round(ev.unavailable_mw))} MW"
 
-                        # Yellow for partial reductions, red for full outage (available == 0)
+                        # Orange for partial reductions, red for full outage (available == 0)
                         fill = "orange"
                         if ev.available_mw is not None and float(ev.available_mw) == 0.0:
-                            fill = "red"
+                            # Only apply this if there is no suffix (eg G31, G42, etc... which would mean that its only a partial outage)
+                            if ev.unit_suffix is None:
+                                fill = "red"
 
                         fig.add_vrect(
                             x0=ev_start,
@@ -307,6 +309,7 @@ async def reactor_operating_data():
                 rows.append(
                     {
                         "block": name_by_label.get(ev.unit_label, ev.unit_label),
+                        "suffix": ev.unit_suffix or "",
                         "start": ev_start.strftime("%Y-%m-%d %H:%M"),
                         "stop": ev_stop.strftime("%Y-%m-%d %H:%M"),
                         "available_mw": "" if ev.available_mw is None else int(round(ev.available_mw)),
@@ -320,6 +323,7 @@ async def reactor_operating_data():
 
             columns = [
                 {"name": "block", "label": "Block", "field": "block", "align": "left"},
+                {"name": "suffix", "label": "Block suffix", "field": "suffix", "align": "left"},
                 {"name": "start", "label": "Start", "field": "start", "align": "left"},
                 {"name": "stop", "label": "Stop", "field": "stop", "align": "left"},
                 {"name": "available_mw", "label": "Available (MW)", "field": "available_mw", "align": "right"},

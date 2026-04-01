@@ -23,6 +23,7 @@ class UmmEvent:
     status: str | None
     title: str | None
     link: str | None
+    unit_suffix: str | None = None  # e.g. "G31" for Ringhals 3 generator 1, or None for the whole block
 
 
 _UNIT_NAME_PATTERNS: list[tuple[str, str]] = [
@@ -138,10 +139,13 @@ def _extract_event_from_description_html(description_html: str) -> Iterable[UmmE
 
         unit_name = cols[i_unit]
 
+        unit_suffix = None
         # Special case for generators of Ringhals 3 & 4
         if unit_name in ["G31", "G32"]:
+            unit_suffix = unit_name
             unit_name = "Ringhals Block 3"
         elif unit_name in ["G41", "G42"]:
+            unit_suffix = unit_name
             unit_name = "Ringhals Block 4"
 
         unit_label = _unit_label_from_unit_name(unit_name)
@@ -169,6 +173,7 @@ def _extract_event_from_description_html(description_html: str) -> Iterable[UmmE
                 status=status,
                 title=None,
                 link=None,
+                unit_suffix=unit_suffix,
             )
         )
 
