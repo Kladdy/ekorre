@@ -114,6 +114,14 @@ async def reactor_operating_data():
                 elif span > timedelta(days=30):
                     aggregate_every = "30m"
 
+                aggregate_every_minutes = {
+                    None: 10,
+                    "30m": 30,
+                    "1h": 60,
+                    "3h": 180,
+                    "6h": 360,
+                }[aggregate_every]
+
                 records = read_from_influx(
                     REACTOR_OPERATING_DATA_BUCKET,
                     REACTOR_OPERATING_DATA_MEASUREMENT,
@@ -157,7 +165,7 @@ async def reactor_operating_data():
                     y[idx] = y_value / rated_reactor_power * 100
 
                 # Time window to allow values to not exist over before inserting null values
-                time_window_minutes = 180
+                time_window_minutes = max(180, aggregate_every_minutes)
 
                 # Loop over all x values. If there is more than time_window minutes between two x values, insert that time in x and a None value in y. This breaks the plot line if data is missing. Updates are expected every 10 minutes.
                 i = 0
