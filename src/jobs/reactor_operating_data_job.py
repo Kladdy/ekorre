@@ -1,4 +1,5 @@
 import http.client
+import json
 import os
 import threading
 import time
@@ -6,7 +7,7 @@ from datetime import datetime
 from pathlib import Path
 
 from bs4 import BeautifulSoup
-from influxdb_client import Point
+from influxdb_client.client.write.point import Point
 from requests import Session
 
 from influxdb import (
@@ -37,10 +38,18 @@ def get_reactor_operating_data() -> list[PowerPlantData]:
     page = session.get(DATA_URL, headers=headers)
     soup = BeautifulSoup(page.content, "html.parser")
     script_tags_with_json = soup.find_all("script", {"type": "application/json"})
-    json_contents = [tag.string for tag in script_tags_with_json]
+    json_contents = [tag.get_text() for tag in script_tags_with_json]
 
-    # Parse the JSON data as a list of PowerPlantData objects
-    power_plant_data_list = [PowerPlantData.from_json(json_content) for json_content in json_contents]
+    power_plant_data_list: list[PowerPlantData] = []
+    for json_content in json_contents:
+        if not json_content:
+            continue
+
+        parsed_json = json.loads(json_content)
+        if isinstance(parsed_json, list):
+            power_plant_data_list.extend(PowerPlantData.from_dict(item) for item in parsed_json)
+        else:
+            power_plant_data_list.append(PowerPlantData.from_dict(parsed_json))
 
     return power_plant_data_list
 
