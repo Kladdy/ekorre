@@ -233,20 +233,37 @@ def fetch_umm_events(
 
     events: list[UmmEvent] = []
 
-    # Nord Pool UMM endpoint returns an Atom feed (<feed><entry>...), not RSS (<rss><item>...).
-    for entry in root.findall(".//{*}entry"):
+    # Nord Pool UMM endpoint may return either Atom (<feed><entry>...) or
+    # RSS (<rss><item>...) depending on parameters. Handle both formats.
+    entries = []
+    entries.extend(root.findall(".//{*}entry"))
+    entries.extend(root.findall(".//{*}item"))
+
+    for entry in entries:
         title = (entry.findtext("{*}title") or "").strip() or None
 
         link = None
-        # <link rel="alternate" href="..." />
+        # Atom: <link rel="alternate" href="..." /> (attribute)
+        # RSS: <link>https://...</link> (text)
+        # Try Atom-style first, then fallback to RSS-style text.
         for link_el in entry.findall("{*}link"):
-            rel = (link_el.attrib.get("rel") or "").strip().lower()
+            # Atom link element has href attribute
             href = (link_el.attrib.get("href") or "").strip()
-            if href and (not rel or rel == "alternate"):
-                link = href
-                break
+            if href:
+                rel = (link_el.attrib.get("rel") or "").strip().lower()
+                if not rel or rel == "alternate":
+                    link = href
+                    break
 
-        content = entry.findtext("{*}content") or ""
+        if not link:
+            # RSS-style link as element text
+            link = (entry.findtext("{*}link") or "").strip() or None
+
+        # Atom uses <content>, RSS uses <description>
+        content = entry.findtext("{*}content")
+        if content is None:
+            content = entry.findtext("{*}description") or ""
+
         # Content is HTML-escaped (e.g. &lt;table&gt;...), so unescape before parsing.
         content_html = unescape(content)
 
