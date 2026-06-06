@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from datetime import datetime
 from html import unescape
@@ -58,6 +59,24 @@ def _parse_mw(value: str) -> float | None:
         return None
 
 
+def _parse_api_datetime(value: str) -> datetime:
+    value = (value or "").strip()
+    if not value:
+        raise ValueError("empty datetime")
+
+    if value.endswith("Z"):
+        value = value[:-1]
+        if "." in value:
+            head, frac = value.split(".", 1)
+            frac = (frac[:6]).ljust(6, "0")
+            value = f"{head}.{frac}"
+        dt = datetime.fromisoformat(value).replace(tzinfo=pytz.UTC)
+    else:
+        dt = datetime.fromisoformat(value)
+
+    return dt.astimezone(STOCKHOLM_TZ)
+
+
 def _looks_cancelled(status: str | None) -> bool:
     if not status:
         return False
@@ -66,13 +85,60 @@ def _looks_cancelled(status: str | None) -> bool:
 
 
 def _unit_label_from_unit_name(unit_name: str) -> str | None:
-    import re
-
     name = (unit_name or "").strip().lower()
     for label, pattern in _UNIT_NAME_PATTERNS:
         if re.search(pattern, name):
             return label
     return None
+
+
+def _extract_events_from_message_api(message: dict) -> list[UmmEvent]:
+    status = "Outdated" if message.get("isOutdated") else "Active"
+    events: list[UmmEvent] = []
+
+    for generation_unit in message.get("generationUnits") or []:
+        unit_name = generation_unit.get("productionUnitName") or ""
+        unit_label = _unit_label_from_unit_name(unit_name)
+        if not unit_label:
+            continue
+
+        unit_suffix = None
+        name = (generation_unit.get("name") or "").strip()
+        if name in {"G31", "G32", "G41", "G42"}:
+            unit_suffix = name
+
+        for time_period in generation_unit.get("timePeriods") or []:
+            start_value = time_period.get("eventStart")
+            stop_value = time_period.get("eventStop")
+            if not start_value or not stop_value:
+                continue
+
+            events.append(
+                UmmEvent(
+                    unit_label=unit_label,
+                    unit_suffix=unit_suffix,
+                    start=_parse_api_datetime(start_value),
+                    stop=_parse_api_datetime(stop_value),
+                    available_mw=time_period.get("availableCapacity"),
+                    unavailable_mw=time_period.get("unavailableCapacity"),
+                    status=status,
+                    title=None,
+                    link=None,
+                )
+            )
+
+    return events
+
+
+def _extract_message_reference(link: str | None, guid: str | None) -> tuple[str | None, int | None]:
+    candidates = [link or "", guid or ""]
+    for candidate in candidates:
+        match = re.search(r"messages/([0-9a-fA-F-]+)(?:/(\d+))?", candidate)
+        if match:
+            message_id = match.group(1)
+            version = int(match.group(2)) if match.group(2) else None
+            return message_id, version
+    return None, None
 
 
 def _extract_event_from_description_html(description_html: str) -> Iterable[UmmEvent]:
@@ -100,11 +166,21 @@ def _extract_event_from_description_html(description_html: str) -> Iterable[UmmE
     if _looks_cancelled(status):
         return []
 
-    # Find the "Production Units" table (the one after the h3)
+    # Find the "Production Units" table. The feed may insert another heading
+    # (for example "Market participants") before the actual table, so look for
+    # the first table after the heading whose header row contains "Unit Name".
     prod_h3 = soup.find(lambda tag: tag.name == "h3" and "production units" in tag.get_text(" ", strip=True).lower())
     prod_table = None
     if prod_h3:
-        prod_table = prod_h3.find_next("table")
+        for table in prod_h3.find_all_next("table"):
+            first_row = table.find("tr")
+            if not first_row:
+                continue
+            header_cells = first_row.find_all(["th", "td"])
+            header_texts = [cell.get_text(" ", strip=True).lower() for cell in header_cells]
+            if "unit name" in header_texts:
+                prod_table = table
+                break
 
     if not prod_table:
         return []
@@ -217,7 +293,7 @@ def build_umm_rss_url(*, event_stop_utc: datetime, limit: int = 10000) -> str:
 def fetch_umm_events(
     *,
     event_stop_utc: datetime,
-    limit: int = 10000,
+    limit: int = 2000,
 ) -> tuple[list[UmmEvent], str]:
     """Fetch Nord Pool UMM RSS feed and extract unavailability events.
 
@@ -241,6 +317,7 @@ def fetch_umm_events(
 
     for entry in entries:
         title = (entry.findtext("{*}title") or "").strip() or None
+        guid = (entry.findtext("{*}guid") or "").strip() or None
 
         link = None
         # Atom: <link rel="alternate" href="..." /> (attribute)
@@ -267,7 +344,21 @@ def fetch_umm_events(
         # Content is HTML-escaped (e.g. &lt;table&gt;...), so unescape before parsing.
         content_html = unescape(content)
 
-        for ev in _extract_event_from_description_html(content_html):
+        extracted_events = list(_extract_event_from_description_html(content_html))
+
+        if not extracted_events:
+            message_id, version = _extract_message_reference(link, guid)
+            if message_id:
+                api_resp = requests.get(f"https://ummapi.nordpoolgroup.com/messages/{message_id}", timeout=20)
+                api_resp.raise_for_status()
+                for message in api_resp.json():
+                    if version is not None and message.get("version") != version:
+                        continue
+                    extracted_events.extend(_extract_events_from_message_api(message))
+                    if version is not None:
+                        break
+
+        for ev in extracted_events:
             events.append(
                 UmmEvent(
                     unit_label=ev.unit_label,
